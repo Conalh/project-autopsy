@@ -24,6 +24,7 @@ The current version is the first working CLI/core slice. It is intentionally sma
 - Markdown report generation
 - JSON report export
 - CLI command for local and public GitHub inspection
+- Web report surface for public GitHub repos and the fixture demo
 
 ## Quick Start
 
@@ -52,6 +53,12 @@ For a deterministic demo that does not depend on the current repo state:
 ```powershell
 npm run inspect:fixture
 npm run inspect:fixture:json
+```
+
+Run the web app:
+
+```powershell
+npm run web:dev
 ```
 
 ## Example Output
@@ -88,6 +95,7 @@ This is an npm workspace with a shared TypeScript analysis core and a thin CLI w
 ```text
 apps/
   cli/              Command-line interface
+  web/              Next.js report interface
 packages/
   core/             Ingestion, detectors, report assembly, Markdown rendering
 ```
@@ -115,12 +123,19 @@ Goal 3 report MVP is in place:
 - Findings and revival tasks have stable IDs
 - Markdown and JSON exports use the same structured report contract
 
+Goal 4 web surface is in place:
+
+- The first screen is a usable public GitHub repo inspector
+- The fixture demo opens the structured report without network access
+- Report pages show score, hypotheses, findings, revival tasks, exports, and evidence
+
 ## Commands
 
 ```powershell
 npm test       # Run core and CLI tests
 npm run build  # Compile all workspaces
 npm run check  # Build, then test
+npm run web:dev  # Start the Next.js report UI
 npm run inspect:fixture  # Print a deterministic fixture autopsy report
 npm run inspect:fixture:json  # Print the same report as JSON
 ```
