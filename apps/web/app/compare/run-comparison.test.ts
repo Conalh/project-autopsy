@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { AutopsyReport, Finding, SavedAnalysisRun } from "@project-autopsy/core";
-import { buildRunComparison } from "./run-comparison";
+import { buildFindingDeltaChartItems, buildRunComparison } from "./run-comparison";
 
 type FindingCounts = AutopsyReport["summary"]["findingCounts"];
 
@@ -46,6 +46,15 @@ describe("run comparison", () => {
       resolvedFindingKinds: ["dependency-drift"],
       sharedFindingKinds: ["setup-risk"]
     });
+  });
+
+  test("builds finding delta chart rows against the largest absolute change", () => {
+    expect(buildFindingDeltaChartItems({ high: -2, medium: 1, low: 0, info: 4 })).toEqual([
+      { severity: "high", label: "High", value: -2, magnitudePercent: 50 },
+      { severity: "medium", label: "Medium", value: 1, magnitudePercent: 25 },
+      { severity: "low", label: "Low", value: 0, magnitudePercent: 0 },
+      { severity: "info", label: "Info", value: 4, magnitudePercent: 100 }
+    ]);
   });
 });
 

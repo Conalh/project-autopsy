@@ -473,6 +473,75 @@ button {
   overflow-wrap: anywhere;
 }
 
+.bar-chart,
+.delta-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.bar-chart-row,
+.delta-chart-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+}
+
+.delta-chart-row {
+  grid-template-columns: 92px minmax(0, 1fr);
+}
+
+.bar-chart-label {
+  display: grid;
+  gap: 1px;
+}
+
+.bar-chart-label span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.bar-chart-label strong,
+.bar-chart-percent {
+  color: var(--strong);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.bar-track,
+.delta-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid #d7deea;
+  border-radius: 999px;
+  background: #edf1f7;
+}
+
+.bar-fill,
+.delta-fill {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+.severity-fill-high,
+.delta-fill-negative {
+  background: var(--danger);
+}
+
+.severity-fill-medium {
+  background: var(--warning);
+}
+
+.severity-fill-low,
+.severity-fill-info,
+.delta-fill-positive {
+  background: var(--accent);
+}
+
 .summary-grid div {
   border-left: 3px solid var(--accent);
   padding-left: 12px;
@@ -757,6 +826,8 @@ textarea {
   }
 
   .timeline-row,
+  .bar-chart-row,
+  .delta-chart-row,
   .metric-grid {
     grid-template-columns: 1fr;
   }

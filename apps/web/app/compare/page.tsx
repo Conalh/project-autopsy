@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { createWebRunStore } from "../lib/run-store";
-import { buildRunComparison, type RunComparison } from "./run-comparison";
+import {
+  buildFindingDeltaChartItems,
+  buildRunComparison,
+  type FindingDeltaChartItem,
+  type RunComparison
+} from "./run-comparison";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +85,8 @@ function CompareHeader() {
 }
 
 function RunComparisonView({ comparison }: { comparison: RunComparison }) {
+  const findingDeltaChartItems = buildFindingDeltaChartItems(comparison.findingDeltas);
+
   return (
     <div className="compare-stack">
       <section className="compare-grid" aria-label="Run summaries">
@@ -104,6 +111,11 @@ function RunComparisonView({ comparison }: { comparison: RunComparison }) {
         </dl>
       </section>
 
+      <section className="panel">
+        <h2>Finding Delta Chart</h2>
+        <FindingDeltaChart items={findingDeltaChartItems} />
+      </section>
+
       <section className="comparison-kind-grid">
         <FindingKindPanel title="Added finding kinds" kinds={comparison.addedFindingKinds} emptyText="No new finding kinds." />
         <FindingKindPanel
@@ -113,6 +125,27 @@ function RunComparisonView({ comparison }: { comparison: RunComparison }) {
         />
         <FindingKindPanel title="Shared finding kinds" kinds={comparison.sharedFindingKinds} emptyText="No overlap." />
       </section>
+    </div>
+  );
+}
+
+function FindingDeltaChart({ items }: { items: FindingDeltaChartItem[] }) {
+  return (
+    <div className="delta-chart" aria-label="Finding severity delta chart">
+      {items.map((item) => (
+        <div key={item.severity} className="delta-chart-row">
+          <div className="bar-chart-label">
+            <span>{item.label}</span>
+            <strong className={deltaClass(item.value)}>{formatDelta(item.value)}</strong>
+          </div>
+          <div className="delta-track" aria-hidden="true">
+            <span
+              className={`delta-fill ${item.value < 0 ? "delta-fill-negative" : "delta-fill-positive"}`}
+              style={{ width: `${item.magnitudePercent}%` }}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { AutopsyReport } from "@project-autopsy/core";
 import { buildReportNavigation } from "./report-navigation";
+import { buildSeverityChartItems } from "./report-charts";
 import { buildDependencySummary, buildTimelineItems } from "./report-summary";
 
 const baseReport: AutopsyReport = {
@@ -112,6 +113,28 @@ describe("report view summaries", () => {
       "Revival Plan 0:#revival-plan",
       "Dependencies 1:#dependencies",
       "Evidence 0:#evidence"
+    ]);
+  });
+
+  test("builds severity chart rows with stable ordering and percentages", () => {
+    expect(
+      buildSeverityChartItems({
+        ...baseReport,
+        summary: {
+          ...baseReport.summary,
+          findingCounts: {
+            high: 1,
+            medium: 2,
+            low: 1,
+            info: 0
+          }
+        }
+      })
+    ).toEqual([
+      { severity: "high", label: "High", count: 1, percent: 25 },
+      { severity: "medium", label: "Medium", count: 2, percent: 50 },
+      { severity: "low", label: "Low", count: 1, percent: 25 },
+      { severity: "info", label: "Info", count: 0, percent: 0 }
     ]);
   });
 });

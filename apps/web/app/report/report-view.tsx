@@ -7,6 +7,7 @@ import {
   type RevivalTask,
   type Severity
 } from "@project-autopsy/core";
+import { buildSeverityChartItems, type SeverityChartItem } from "./report-charts";
 import { buildReportNavigation } from "./report-navigation";
 import { buildDependencySummary, buildTimelineItems, type TimelineItem } from "./report-summary";
 
@@ -29,6 +30,7 @@ export function ReportView({
   const json = renderJsonReport(report);
   const timelineItems = buildTimelineItems(report);
   const dependencySummary = buildDependencySummary(report);
+  const severityChartItems = buildSeverityChartItems(report);
   const navigation = buildReportNavigation(report);
 
   return (
@@ -151,6 +153,11 @@ export function ReportView({
             </dl>
           </section>
 
+          <section className="panel">
+            <h2>Finding Severity</h2>
+            <SeverityChart items={severityChartItems} />
+          </section>
+
           <section id="dependencies" className="panel">
             <h2>Dependency Focus</h2>
             <dl className="metric-grid">
@@ -217,6 +224,25 @@ export function ReportView({
         </aside>
       </div>
     </main>
+  );
+}
+
+function SeverityChart({ items }: { items: SeverityChartItem[] }) {
+  return (
+    <div className="bar-chart" aria-label="Finding severity distribution">
+      {items.map((item) => (
+        <div key={item.severity} className="bar-chart-row">
+          <div className="bar-chart-label">
+            <span>{item.label}</span>
+            <strong>{item.count}</strong>
+          </div>
+          <div className="bar-track" aria-hidden="true">
+            <span className={`bar-fill severity-fill-${item.severity}`} style={{ width: `${item.percent}%` }} />
+          </div>
+          <span className="bar-chart-percent">{item.percent}%</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
