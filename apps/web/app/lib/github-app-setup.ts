@@ -1,11 +1,15 @@
+import { readGitHubAppInstallation } from "./github-app-installation-store";
+
 type GitHubAppSetupEnv = Record<string, string | undefined>;
 
 export type GitHubAuthMode = "none" | "token" | "github_app_install_required" | "github_app";
+export type GitHubAppInstallationSource = "env" | "stored";
 
 export interface GitHubAppSetup {
   authMode: GitHubAuthMode;
   readyForPrivateRepos: boolean;
   installUrl?: string;
+  installationSource?: GitHubAppInstallationSource;
   missing: string[];
 }
 
@@ -19,22 +23,23 @@ export function getGitHubAppSetup(env: GitHubAppSetupEnv = process.env): GitHubA
   }
 
   const appId = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_ID");
-  const installationId = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID");
+  const installation = readInstallationId(env);
   const privateKey =
     readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY") ??
     readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH");
   const installUrl = readInstallUrl(env);
   const missing = [
     ...(!appId ? ["PROJECT_AUTOPSY_GITHUB_APP_ID"] : []),
-    ...(!installationId ? ["PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID"] : []),
+    ...(!installation?.id ? ["PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID"] : []),
     ...(!privateKey ? ["PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY or PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH"] : [])
   ];
 
-  if (appId && privateKey && installationId) {
+  if (appId && privateKey && installation?.id) {
     return {
       authMode: "github_app",
       readyForPrivateRepos: true,
       installUrl,
+      installationSource: installation.source,
       missing: []
     };
   }
@@ -53,6 +58,18 @@ export function getGitHubAppSetup(env: GitHubAppSetupEnv = process.env): GitHubA
     readyForPrivateRepos: false,
     missing
   };
+}
+
+function readInstallationId(
+  env: GitHubAppSetupEnv
+): { id: string; source: GitHubAppInstallationSource } | undefined {
+  const envInstallationId = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID");
+  if (envInstallationId) {
+    return { id: envInstallationId, source: "env" };
+  }
+
+  const storedInstallationId = readGitHubAppInstallation({ env })?.installationId;
+  return storedInstallationId ? { id: storedInstallationId, source: "stored" } : undefined;
 }
 
 function readInstallUrl(env: GitHubAppSetupEnv): string | undefined {

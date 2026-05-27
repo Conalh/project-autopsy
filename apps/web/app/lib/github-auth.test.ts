@@ -1,5 +1,9 @@
 import { generateKeyPairSync } from "node:crypto";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, test } from "vitest";
+import { saveGitHubAppInstallation } from "./github-app-installation-store";
 import { resolveGitHubToken } from "./github-auth";
 
 describe("GitHub auth resolver", () => {
@@ -55,6 +59,31 @@ describe("GitHub auth resolver", () => {
     expect(requests[0]?.authorization).toMatch(/^Bearer [^.]+\.[^.]+\.[^.]+$/);
     expect(readJwtPayload(requests[0]?.authorization ?? "")).toMatchObject({ iss: "123" });
   });
+
+  test("mints an installation token from the stored GitHub App installation id", async () => {
+    const requests: string[] = [];
+    const filePath = await createStorePath();
+    saveGitHubAppInstallation({ installationId: "789" }, { path: filePath });
+
+    const token = await resolveGitHubToken(
+      {
+        PROJECT_AUTOPSY_GITHUB_APP_ID: "123",
+        PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH: filePath,
+        PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY: createPrivateKey()
+      },
+      async (input: string | URL | Request) => {
+        requests.push(input.toString());
+
+        return new Response(JSON.stringify({ token: "stored-installation-token" }), {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    );
+
+    expect(token).toBe("stored-installation-token");
+    expect(requests).toEqual(["https://api.github.com/app/installations/789/access_tokens"]);
+  });
 });
 
 function createPrivateKey(): string {
@@ -76,4 +105,9 @@ function createPrivateKey(): string {
 function readJwtPayload(authorization: string): Record<string, unknown> {
   const payload = authorization.replace(/^Bearer\s+/, "").split(".")[1] ?? "";
   return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
+}
+
+async function createStorePath(): Promise<string> {
+  const directory = await mkdtemp(path.join(tmpdir(), "project-autopsy-gh-app-"));
+  return path.join(directory, "installation.json");
 }
