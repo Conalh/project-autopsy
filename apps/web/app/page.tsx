@@ -22,10 +22,24 @@ export default async function HomePage() {
       </nav>
 
       <section className="inspect-bar" aria-labelledby="inspect-title">
-        <div>
+        <div className="inspect-copy">
           <p className="eyebrow">Project Autopsy</p>
           <h1 id="inspect-title">Inspect a stalled repository</h1>
           <p className="muted">Create evidence-backed reports for public repos, private repos, and saved local runs.</p>
+          <dl className="hero-facts">
+            <div>
+              <dt>Inputs</dt>
+              <dd>Local, GitHub, private</dd>
+            </div>
+            <div>
+              <dt>Output</dt>
+              <dd>Markdown and JSON</dd>
+            </div>
+            <div>
+              <dt>Mode</dt>
+              <dd>No repo commands</dd>
+            </div>
+          </dl>
         </div>
         <form className="repo-form" action="/report">
           <label htmlFor="source">GitHub repository URL</label>
@@ -75,7 +89,7 @@ export default async function HomePage() {
               {recentRuns.map((run) => (
                 <Link key={run.id} href={`/runs/${run.id}`}>
                   <strong>{run.projectName}</strong>
-                  <span>{run.verdictStatus}</span>
+                  <span className={`status-pill status-pill-${run.verdictStatus}`}>{run.verdictStatus}</span>
                   <em>{run.score}/100</em>
                 </Link>
               ))}

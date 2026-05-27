@@ -168,7 +168,9 @@ function RunSummaryCard({ label, run }: { label: string; run: RunComparison["lef
         </div>
         <div>
           <dt>Status</dt>
-          <dd>{run.verdictStatus}</dd>
+          <dd>
+            <span className={`status-pill status-pill-${run.verdictStatus}`}>{run.verdictStatus}</span>
+          </dd>
         </div>
       </dl>
       <Link className="inline-action" href={`/runs/${run.id}`}>

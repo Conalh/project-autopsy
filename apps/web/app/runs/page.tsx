@@ -137,7 +137,7 @@ export default async function RunsPage({ searchParams }: RunsPageProps) {
                         <em>{run.source}</em>
                         <code>{run.id}</code>
                       </span>
-                      <span>{run.verdictStatus}</span>
+                      <span className={`status-pill status-pill-${run.verdictStatus}`}>{run.verdictStatus}</span>
                       <span>{run.score}/100</span>
                       <time>{run.createdAt.slice(0, 10)}</time>
                     </Link>
