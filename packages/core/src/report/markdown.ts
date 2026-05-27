@@ -18,6 +18,12 @@ export function renderMarkdownReport(report: AutopsyReport): string {
     `- Latest commit: ${report.snapshot.commits[0]?.message ?? "No commit history found"}`,
     `- Technologies: ${report.snapshot.summary.technologies.join(", ") || "Unknown"}`,
     "",
+    "## Activity Timeline",
+    "",
+    ...formatActivityTimeline(report),
+    "## Dependency Focus",
+    "",
+    ...formatDependencyFocus(report),
     ...formatDependencySnapshot(report),
     "## Stall Hypotheses",
     "",
@@ -38,6 +44,45 @@ export function renderMarkdownReport(report: AutopsyReport): string {
 
 function formatReportTitle(projectName: string): string {
   return projectName.toLowerCase() === "project autopsy" ? "Project Autopsy" : `Project Autopsy: ${projectName}`;
+}
+
+function formatActivityTimeline(report: AutopsyReport): string[] {
+  if (report.snapshot.commits.length === 0) {
+    return ["No commit history was available for this inspection.", ""];
+  }
+
+  return [
+    ...report.snapshot.commits.slice(0, 5).map((commit) => {
+      const shortSha = commit.sha.slice(0, 7);
+      const author = commit.authorName || "Unknown author";
+      return `- **${formatDate(commit.committedAt)}** \`${shortSha}\` ${commit.message || "Commit without a message"} - ${author}`;
+    }),
+    ""
+  ];
+}
+
+function formatDependencyFocus(report: AutopsyReport): string[] {
+  const managers = new Set<string>();
+  let dependencyCount = 0;
+  let devDependencyCount = 0;
+  let scriptCount = 0;
+
+  for (const manifest of report.snapshot.manifests) {
+    managers.add(manifest.manager);
+    dependencyCount += Object.keys(manifest.dependencies).length;
+    devDependencyCount += Object.keys(manifest.devDependencies).length;
+    scriptCount += Object.keys(manifest.scripts).length;
+  }
+
+  return [
+    `- Manifests: ${report.snapshot.manifests.length}`,
+    `- Managers: ${managers.size > 0 ? [...managers].sort().join(", ") : "none"}`,
+    `- Runtime dependencies: ${dependencyCount}`,
+    `- Dev dependencies: ${devDependencyCount}`,
+    `- Scripts: ${scriptCount}`,
+    `- Drift findings: ${report.findings.filter((finding) => finding.kind === "dependency-drift").length}`,
+    ""
+  ];
 }
 
 function formatDependencySnapshot(report: AutopsyReport): string[] {
@@ -69,6 +114,15 @@ function formatNameValueMap(values: Record<string, string>): string {
   }
 
   return entries.map(([name, value]) => `${name} ${value}`.trim()).join(", ");
+}
+
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unknown date";
+  }
+
+  return parsed.toISOString().slice(0, 10);
 }
 
 function formatHypothesis(hypothesis: StallHypothesis): string[] {

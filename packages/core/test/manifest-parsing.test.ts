@@ -176,6 +176,11 @@ describe("manifest parsing beyond npm", () => {
 
     const markdown = renderMarkdownReport(await analyzeRepository(repoPath));
 
+    expect(markdown).toContain("## Dependency Focus");
+    expect(markdown).toContain("- Manifests: 5");
+    expect(markdown).toContain("- Runtime dependencies: 10");
+    expect(markdown).toContain("- Dev dependencies: 2");
+    expect(markdown).toContain("- Scripts: 1");
     expect(markdown).toContain("## Dependency Snapshot");
     expect(markdown).toContain("pyproject.toml");
     expect(markdown).toContain("fastapi");

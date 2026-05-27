@@ -41,6 +41,8 @@ describe("Goal 3 report MVP", () => {
 
     expect(markdown).toContain("**Score:** ");
     expect(markdown).toContain("**Status:** at-risk");
+    expect(markdown).toContain("## Activity Timeline");
+    expect(markdown).toContain("## Dependency Focus");
     expect(markdown).toContain("## Evidence Index");
     expect(markdown).toContain("[EV-003]");
     expect(markdown).toContain("TASK-001");

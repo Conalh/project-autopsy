@@ -187,6 +187,7 @@ Invoke-RestMethod `
 ```
 
 The real report also includes a project snapshot, dependency snapshot, ranked stall hypotheses, evidence IDs, expected outcomes, and verification commands.
+Markdown exports include a recent activity timeline and dependency focus rollup so handoff readers can scan momentum and package surface before diving into raw findings.
 
 ## Analysis Model
 
@@ -262,7 +263,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Hosted operational views can require `PROJECT_AUTOPSY_ADMIN_TOKEN`.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
-- Web UI includes saved-run browsing, shareable report URLs, saved-run comparisons, lightweight report charts, GitHub setup state, and report section navigation.
+- Web UI includes saved-run browsing, shareable report URLs, saved-run comparisons, lightweight report charts, activity timeline, dependency focus, GitHub setup state, and report section navigation.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -275,7 +276,7 @@ Limits worth knowing:
 
 ## Roadmap
 
-1. Report polish for timeline and dependency-focused views.
+1. Deeper timeline and dependency visualization polish.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
 4. Deeper charting and report visualization polish.

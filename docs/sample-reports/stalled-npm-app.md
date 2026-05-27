@@ -14,6 +14,19 @@ This repo is reviveable, but 2 high-severity issue(s) should be handled before f
 - Latest commit: No commit history found
 - Technologies: next, npm, typescript
 
+## Activity Timeline
+
+No commit history was available for this inspection.
+
+## Dependency Focus
+
+- Manifests: 1
+- Managers: npm
+- Runtime dependencies: 1
+- Dev dependencies: 1
+- Scripts: 1
+- Drift findings: 0
+
 ## Dependency Snapshot
 
 - **package.json** (npm)
