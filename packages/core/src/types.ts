@@ -56,6 +56,9 @@ export interface SnapshotSummary {
 export interface RepoSnapshot {
   sourceType: SourceType;
   rootPath: string;
+  owner?: string;
+  repo?: string;
+  url?: string;
   defaultBranch?: string;
   headSha?: string;
   fileCount: number;

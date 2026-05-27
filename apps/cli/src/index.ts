@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import { stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { analyzeRepository, renderMarkdownReport } from "@project-autopsy/core";
+import {
+  analyzeRepository,
+  isGitHubUrl,
+  renderMarkdownReport,
+  type GitHubInspectionOptions
+} from "@project-autopsy/core";
 
 export interface CliResult {
   exitCode: number;
@@ -9,25 +14,28 @@ export interface CliResult {
   stderr: string;
 }
 
-export async function runCli(args: string[]): Promise<CliResult> {
+export async function runCli(args: string[], options: GitHubInspectionOptions = {}): Promise<CliResult> {
   const [command, targetPath, ...rest] = args;
   const format = readFormat(rest);
+  const branch = readOption(rest, "--branch");
 
   if (command !== "inspect" || !targetPath || format !== "markdown") {
     return usageFailure();
   }
 
   try {
-    const targetInfo = await stat(targetPath);
-    if (!targetInfo.isDirectory()) {
-      return {
-        exitCode: 1,
-        stdout: "",
-        stderr: `Path is not a directory: ${targetPath}\n`
-      };
+    if (!isGitHubUrl(targetPath)) {
+      const targetInfo = await stat(targetPath);
+      if (!targetInfo.isDirectory()) {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: `Path is not a directory: ${targetPath}\n`
+        };
+      }
     }
 
-    const report = await analyzeRepository(targetPath);
+    const report = await analyzeRepository(targetPath, { ...options, branch });
     return {
       exitCode: 0,
       stdout: renderMarkdownReport(report),
@@ -43,12 +51,17 @@ export async function runCli(args: string[]): Promise<CliResult> {
 }
 
 function readFormat(args: string[]): "markdown" | undefined {
-  const formatIndex = args.indexOf("--format");
-  if (formatIndex === -1) {
-    return "markdown";
+  const value = readOption(args, "--format") ?? "markdown";
+  return value === "markdown" ? "markdown" : undefined;
+}
+
+function readOption(args: string[], name: string): string | undefined {
+  const optionIndex = args.indexOf(name);
+  if (optionIndex === -1) {
+    return undefined;
   }
 
-  return args[formatIndex + 1] === "markdown" ? "markdown" : undefined;
+  return args[optionIndex + 1];
 }
 
 function usageFailure(): CliResult {
@@ -57,9 +70,9 @@ function usageFailure(): CliResult {
     stdout: "",
     stderr: [
       "Usage:",
-      "  project-autopsy inspect <path> [--format markdown]",
+      "  project-autopsy inspect <path-or-github-url> [--branch name] [--format markdown]",
       "",
-      "This first slice supports local repository inspection and Markdown output."
+      "This slice supports local repository paths, public GitHub URLs, and Markdown output."
     ].join("\n") + "\n"
   };
 }

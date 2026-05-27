@@ -3,6 +3,11 @@ import { detectProjectIdentity } from "../detect/identity.js";
 import { detectMomentumBreak } from "../detect/momentum-break.js";
 import { detectSetupRisk } from "../detect/setup-risk.js";
 import { detectValidationSurface } from "../detect/validation-surface.js";
+import {
+  inspectGitHubRepository,
+  isGitHubUrl,
+  type GitHubInspectionOptions
+} from "../ingest/github.js";
 import { inspectLocalRepository } from "../ingest/local.js";
 import type {
   AutopsyReport,
@@ -11,8 +16,13 @@ import type {
   StallHypothesis
 } from "../types.js";
 
-export async function analyzeRepository(rootPath: string): Promise<AutopsyReport> {
-  const snapshot = await inspectLocalRepository(rootPath);
+export async function analyzeRepository(
+  source: string,
+  options: GitHubInspectionOptions = {}
+): Promise<AutopsyReport> {
+  const snapshot = isGitHubUrl(source)
+    ? await inspectGitHubRepository({ url: source, branch: options.branch }, options)
+    : await inspectLocalRepository(source);
   const findings = [
     ...detectProjectIdentity(snapshot),
     ...detectMomentumBreak(snapshot),

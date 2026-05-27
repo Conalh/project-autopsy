@@ -9,6 +9,8 @@ The current version is the first working CLI/core slice. It is intentionally sma
 ## What Works Today
 
 - Local repository inspection
+- Public GitHub repository inspection
+- GitHub URL parsing with optional branch selection
 - File tree classification
 - npm `package.json` manifest parsing
 - README and docs discovery
@@ -34,6 +36,13 @@ You can inspect another local repository by replacing `.` with a path:
 
 ```powershell
 node apps\cli\dist\index.js inspect C:\path\to\old-repo --format markdown
+```
+
+Or inspect a public GitHub repository:
+
+```powershell
+node apps\cli\dist\index.js inspect https://github.com/octocat/Hello-World --format markdown
+node apps\cli\dist\index.js inspect https://github.com/owner/repo --branch main --format markdown
 ```
 
 For a deterministic demo that does not depend on the current repo state:
@@ -71,14 +80,20 @@ packages/
 
 The core package owns the product behavior. The CLI only parses arguments, calls the core, and prints the report. That keeps the analysis engine reusable for a future web app or API.
 
-## Goal 0 Status
+## Current Status
 
-The product skeleton is in place:
+Goal 0 product skeleton is in place:
 
 - `apps/cli`: CLI entry point and CLI behavior tests
 - `packages/core`: shared TypeScript contracts, ingestion, detectors, report assembly, and Markdown rendering
 - `fixtures`: durable local test repositories for npm, Python, Rust, Go, and mixed-stack projects
 - `npm run inspect:fixture`: deterministic demo report from `fixtures/stalled-npm-app`
+
+Goal 1 ingestion is in place:
+
+- Local and public GitHub sources normalize into the same snapshot/report pipeline
+- GitHub ingestion reads repo metadata, recursive tree data, selected text docs, manifests, and recent commits
+- Hosted ingestion does not execute project commands
 
 ## Commands
 
@@ -91,16 +106,16 @@ npm run inspect:fixture  # Print a deterministic fixture autopsy report
 
 ## Current Limits
 
-- GitHub URL ingestion is not implemented yet.
 - The CLI supports Markdown output only.
 - Dependency freshness is heuristic only; it does not query package registries yet.
 - Hosted mode, persistence, and the web UI are future work.
 - The analyzer never runs arbitrary commands from inspected repositories.
+- Private GitHub repositories and GitHub App installation are not implemented yet.
 
 ## Next Milestones
 
-1. Add public GitHub repository ingestion.
-2. Expand manifest support beyond npm.
-3. Add dependency drift rules that can query registries explicitly.
-4. Save rendered sample reports for regression review.
-5. Build the web report surface on top of the core output.
+1. Expand manifest parsing details beyond npm.
+2. Add dependency drift rules that can query registries explicitly.
+3. Save rendered sample reports for regression review.
+4. Build the web report surface on top of the core output.
+5. Add persistence for saved analysis runs.
