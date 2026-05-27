@@ -92,12 +92,14 @@ The web/API surface also supports GitHub App installation tokens through environ
 $env:PROJECT_AUTOPSY_GITHUB_APP_ID="<app-id>"
 $env:PROJECT_AUTOPSY_GITHUB_APP_SLUG="<app-slug>"
 $env:PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID="<installation-id>"
+$env:PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET="<random-secret>"
 $env:PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH="C:\path\to\github-app-private-key.pem"
 ```
 
 Inline private keys are supported with `PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY`; escaped `\n` sequences are normalized before signing.
 If your app install URL does not follow the standard slug format, set `PROJECT_AUTOPSY_GITHUB_APP_INSTALL_URL`.
 When GitHub redirects back to `/api/github-app/callback?installation_id=...`, Project Autopsy stores that installation id in `.project-autopsy/github-app-installation.json` by default. Override the store path with `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH`; an explicit `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID` still wins.
+Set `PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET` in hosted mode so install redirects include a signed `state` value and callbacks without a valid state are rejected.
 
 ### Dependency Freshness
 
@@ -256,7 +258,7 @@ Limits worth knowing:
 - Hosted API mode is still local-first by default; production auth and durable queue workers are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
-- GitHub App callback persistence uses local ignored storage by default; hosted secret storage and callback state validation are future work.
+- GitHub App callback persistence uses local ignored storage by default; hosted installation secret storage is future work.
 - Web UI polish is intentionally behind the core/report contract.
 
 ## Roadmap
@@ -264,5 +266,5 @@ Limits worth knowing:
 1. Report polish for timeline and dependency-focused views.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
-4. Harden GitHub App callback state validation and hosted installation secret storage.
+4. Add hosted installation secret storage for GitHub App callbacks.
 5. Durable hosted queue workers for long-running repository analysis.
