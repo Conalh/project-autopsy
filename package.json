@@ -14,6 +14,7 @@
     "coverage": "npm run coverage --workspaces",
     "coverage:badge": "node scripts/coverage-badge.mjs",
     "coverage:badge:check": "node scripts/coverage-badge.mjs --check",
+    "package:check": "npm run build && node scripts/package-check.mjs",
     "check": "npm run build && npm run test",
     "web:dev": "npm run dev --workspace @project-autopsy/web",
     "samples:update": "npm run build --workspace @project-autopsy/core && node scripts/sample-reports.mjs --write",

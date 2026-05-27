@@ -6,6 +6,9 @@
   "bin": {
     "project-autopsy": "dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build --workspace @project-autopsy/core && vitest run",

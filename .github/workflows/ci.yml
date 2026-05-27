@@ -49,3 +49,6 @@ jobs:
 
       - name: Check sample report drift
         run: npm run samples:check
+
+      - name: Check package surface
+        run: npm run package:check

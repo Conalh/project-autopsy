@@ -20,6 +20,18 @@ flowchart LR
 
 **See also:** [sample Markdown report](docs/sample-reports/stalled-npm-app.md), [sample JSON report](docs/sample-reports/stalled-npm-app.json), and [fixtures](fixtures).
 
+## Golden Demo
+
+```powershell
+npm install
+npm run build
+npm run inspect:fixture
+node apps\cli\dist\index.js inspect fixtures\stalled-npm-app --format json --save
+npm run web:dev
+```
+
+Then open the saved-runs page in the web app to reopen the report, filter/group saved runs, compare two saved inspections, copy a share URL, or export Markdown.
+
 ## Why This Exists
 
 Old repos usually do not fail for mysterious reasons. They stall because setup rots, scripts disappear, dependency versions drift, docs overpromise, tests never land, or the next useful task is unclear.
@@ -248,15 +260,22 @@ npm run build
 npm run coverage
 npm run coverage:badge
 npm run samples:check
+npm run package:check
 ```
 
-The GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the same build, test, coverage, coverage-badge drift, and sample-report drift checks on pushes, pull requests, and manual dispatches. Coverage reports are uploaded as a CI artifact, and the public README badge is backed by [`.github/badges/coverage.json`](.github/badges/coverage.json).
+The GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the same build, test, coverage, coverage-badge drift, sample-report drift, and package-surface checks on pushes, pull requests, and manual dispatches. Coverage reports are uploaded as a CI artifact, and the public README badge is backed by [`.github/badges/coverage.json`](.github/badges/coverage.json).
 
 Current coverage focus:
 
 - Core ingestion, detectors, report schema, persistence, manifest parsing, dependency drift, and sample report drift.
 - CLI behavior for local paths, public GitHub, private token flow, save/list/show, and registry checks.
 - Web API route behavior for inspect, saved run JSON, Markdown export, request validation, report charts, saved-run trends, and saved-run filters.
+
+## Package Surface
+
+`npm run package:check` builds the workspace, runs `npm pack --dry-run --json` for `@project-autopsy/core` and `@project-autopsy/cli`, and fails if package tarballs include source folders, test folders, or TypeScript config files. This keeps the installable surface limited to compiled `dist` output and package metadata.
+
+The CLI package still depends on the local workspace core package during development. Treat the current package check as publish-surface readiness, not an npm release command.
 
 ## Status
 
@@ -275,6 +294,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
 - Web UI includes saved-run browsing with filters/grouping, score trend visualization, shareable report URLs, saved-run comparisons, severity/finding/dependency charts, activity timeline, dependency focus, GitHub setup state, operations health, and report section navigation.
+- Core and CLI package dry-runs are CI-checked to keep source and test files out of installable tarballs.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -283,12 +303,12 @@ Limits worth knowing:
 - Registry freshness is npm/PyPI/crates.io-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
-- Saved-run bulk actions, retention controls, and broader production auth are future work.
+- npm publication, saved-run bulk actions, retention controls, and broader production auth are future work.
 
 ## Roadmap
 
 1. Saved-run bulk actions and retention controls.
-2. Registry-backed drift checks for Go and .NET.
-3. Coverage threshold policy and package-level coverage notes.
-4. Broader production auth and deployment hardening.
-5. Deeper report drilldowns for timeline, dependency, and finding history.
+2. npm release decision: package names, dependency strategy, license, and versioning.
+3. Registry-backed drift checks for Go and .NET.
+4. Coverage threshold policy and package-level coverage notes.
+5. Broader production auth and deployment hardening.
