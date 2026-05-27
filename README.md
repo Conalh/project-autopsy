@@ -124,6 +124,7 @@ Saved runs live in `.project-autopsy/runs.sqlite` by default and are ignored by 
 
 Hosted web/API runs can use Postgres by setting `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL`. When neither is present, the web surface falls back to SQLite. `PROJECT_AUTOPSY_RUN_DB_PATH` can override the local SQLite path.
 Queued hosted jobs persist payload, status, result, error, and retry attempts in Postgres. Set `PROJECT_AUTOPSY_ANALYSIS_JOB_MAX_ATTEMPTS` to retry transient queued-analysis failures before a job is marked failed. Set `PROJECT_AUTOPSY_ANALYSIS_QUEUE_MODE=external` when a separate worker process will claim and process queued jobs through `processNextAnalysisJob`.
+Schedulers can trigger bounded external-worker batches through `POST /api/worker/run` with an optional JSON body such as `{ "maxJobs": 5, "cleanupTerminalJobsOlderThan": "2026-05-20T00:00:00.000Z" }`.
 
 ## Web And API
 
@@ -153,6 +154,7 @@ Invoke-RestMethod `
 | `GET /api/github-app/install` | Redirect to the configured GitHub App installation URL |
 | `GET /api/github-app/callback` | Persist the GitHub App `installation_id` callback for future API auth |
 | `GET /api/jobs/{id}` | Poll an in-process queued inspection job |
+| `POST /api/worker/run` | Run a bounded external worker batch for scheduler-triggered hosted processing |
 | `GET /ops` | View queue storage mode, health alerts, job status counts, and recent analysis jobs; guarded by `PROJECT_AUTOPSY_ADMIN_TOKEN` when configured |
 | `GET /api/runs/{id}` | Load a saved run as JSON |
 | `GET /api/runs/{id}/export.md` | Load a saved run as Markdown |
@@ -255,6 +257,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
 - API inspections can run through a queue and be polled by job id; hosted mode persists job payload, state, result, errors, and retry attempts in Postgres.
 - External workers can process bounded job batches with completion/failure/requeue metrics and terminal-job cleanup.
+- Hosted schedulers can trigger bounded worker batches through `POST /api/worker/run`.
 - Operations dashboard shows queue storage mode, health alerts, job status counts, and recent analysis jobs.
 - Hosted operational views can require `PROJECT_AUTOPSY_ADMIN_TOKEN`.
 - Web and API routes reuse the same core package.
@@ -264,7 +267,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 
 Limits worth knowing:
 
-- Hosted API mode is still local-first by default; deployed worker scheduling and broader production auth are future work.
+- Hosted API mode is still local-first by default; broader production auth is future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
@@ -276,4 +279,4 @@ Limits worth knowing:
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
 4. Deeper charting and report visualization polish.
-5. Deployed worker scheduling and broader production auth.
+5. Broader production auth and deployment hardening.
