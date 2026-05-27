@@ -57,6 +57,7 @@ npm exec -- project-autopsy inspect fixtures/stalled-npm-app --format markdown
 The workspace exposes `project-autopsy` as a local npm bin after install. If you prefer not to use `npm exec`, call the built CLI directly:
 
 ```powershell
+node apps\cli\dist\index.js --help
 node apps\cli\dist\index.js inspect fixtures\stalled-npm-app --format markdown
 ```
 
@@ -284,6 +285,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Local and GitHub ingestion share one normalized snapshot pipeline.
 - Private GitHub repos work with a supplied token.
 - Reports export as Markdown and JSON.
+- CLI help and version flags are available through `--help`, `-h`, `--version`, and `-v`.
 - Saved run history is backed by local SQLite.
 - Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
 - API inspections can run through a queue and be polled by job id; hosted mode persists job payload, state, result, errors, and retry attempts in Postgres.

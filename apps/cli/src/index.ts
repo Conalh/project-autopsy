@@ -13,6 +13,8 @@ import {
   type GitHubInspectionOptions
 } from "@project-autopsy/core";
 
+const CLI_VERSION = "0.1.0";
+
 export interface CliResult {
   exitCode: number;
   stdout: string;
@@ -20,6 +22,22 @@ export interface CliResult {
 }
 
 export async function runCli(args: string[], options: GitHubInspectionOptions = {}): Promise<CliResult> {
+  if (args.includes("--help") || args.includes("-h")) {
+    return {
+      exitCode: 0,
+      stdout: usageText(),
+      stderr: ""
+    };
+  }
+
+  if (args.includes("--version") || args.includes("-v")) {
+    return {
+      exitCode: 0,
+      stdout: `project-autopsy ${CLI_VERSION}\n`,
+      stderr: ""
+    };
+  }
+
   const [command, targetPath, ...rest] = args;
   const format = readFormat(rest);
   const branch = readOption(rest, "--branch");
@@ -124,15 +142,30 @@ function usageFailure(): CliResult {
   return {
     exitCode: 1,
     stdout: "",
-    stderr: [
-      "Usage:",
-      "  project-autopsy inspect <path-or-github-url> [--branch name] [--format markdown|json] [--save] [--db path] [--check-registry] [--github-token token]",
-      "  project-autopsy runs [--db path]",
-      "  project-autopsy show <run_id> [--format markdown|json] [--db path]",
-      "",
-      "This slice supports local repository paths, public GitHub URLs, and Markdown or JSON output."
-    ].join("\n") + "\n"
+    stderr: usageText()
   };
+}
+
+function usageText(): string {
+  return [
+    "Project Autopsy",
+    "",
+    "Usage:",
+    "  project-autopsy inspect <path-or-github-url> [--branch name] [--format markdown|json] [--save] [--db path] [--check-registry] [--github-token token]",
+    "  project-autopsy runs [--db path]",
+    "  project-autopsy show <run_id> [--format markdown|json] [--db path]",
+    "",
+    "Options:",
+    "  --format markdown|json      Choose report output format. Defaults to markdown.",
+    "  --save                      Persist the report to the local run store.",
+    "  --db path                   Override the saved-run SQLite path.",
+    "  --check-registry            Check npm, PyPI, and crates.io freshness.",
+    "  --github-token token        Inspect private GitHub repositories.",
+    "  --help, -h                  Show this help message.",
+    "  --version, -v               Show the CLI version.",
+    "",
+    "Project Autopsy reads repository structure and metadata; it does not execute inspected repository commands."
+  ].join("\n") + "\n";
 }
 
 async function main(): Promise<void> {

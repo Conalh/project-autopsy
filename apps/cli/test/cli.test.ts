@@ -63,6 +63,21 @@ describe("project-autopsy CLI", () => {
     expect(result.stderr).toContain("Usage:");
   });
 
+  test("prints help and version without requiring a target", async () => {
+    const help = await runCli(["--help"]);
+    const version = await runCli(["--version"]);
+
+    expect(help.exitCode).toBe(0);
+    expect(help.stdout).toContain("Project Autopsy");
+    expect(help.stdout).toContain("project-autopsy inspect <path-or-github-url>");
+    expect(help.stderr).toBe("");
+    expect(version).toEqual({
+      exitCode: 0,
+      stdout: "project-autopsy 0.1.0\n",
+      stderr: ""
+    });
+  });
+
   test("prints a markdown report for public GitHub URLs", async () => {
     const result = await runCli(["inspect", "https://github.com/acme/stalled-notes"], {
       fetch: createGitHubFetch()
