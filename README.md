@@ -100,6 +100,7 @@ Inline private keys are supported with `PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY`;
 If your app install URL does not follow the standard slug format, set `PROJECT_AUTOPSY_GITHUB_APP_INSTALL_URL`.
 When GitHub redirects back to `/api/github-app/callback?installation_id=...`, Project Autopsy stores that installation id in `.project-autopsy/github-app-installation.json` by default, or in Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured. Override the local store path with `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH`; an explicit `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID` still wins.
 Set `PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET` in hosted mode so install redirects include a signed `state` value and callbacks without a valid state are rejected.
+Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views such as `/ops`. Authenticated requests can send `Authorization: Bearer <token>` or `x-project-autopsy-admin-token: <token>`.
 
 ### Dependency Freshness
 
@@ -152,7 +153,7 @@ Invoke-RestMethod `
 | `GET /api/github-app/install` | Redirect to the configured GitHub App installation URL |
 | `GET /api/github-app/callback` | Persist the GitHub App `installation_id` callback for future API auth |
 | `GET /api/jobs/{id}` | Poll an in-process queued inspection job |
-| `GET /ops` | View queue storage mode, health alerts, job status counts, and recent analysis jobs |
+| `GET /ops` | View queue storage mode, health alerts, job status counts, and recent analysis jobs; guarded by `PROJECT_AUTOPSY_ADMIN_TOKEN` when configured |
 | `GET /api/runs/{id}` | Load a saved run as JSON |
 | `GET /api/runs/{id}/export.md` | Load a saved run as Markdown |
 | `GET /share/{id}` | Open a read-only share view for a saved run |
@@ -255,6 +256,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - API inspections can run through a queue and be polled by job id; hosted mode persists job payload, state, result, errors, and retry attempts in Postgres.
 - External workers can process bounded job batches with completion/failure/requeue metrics and terminal-job cleanup.
 - Operations dashboard shows queue storage mode, health alerts, job status counts, and recent analysis jobs.
+- Hosted operational views can require `PROJECT_AUTOPSY_ADMIN_TOKEN`.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
 - Web UI includes saved-run browsing, shareable report URLs, saved-run comparisons, lightweight report charts, GitHub setup state, and report section navigation.
@@ -262,7 +264,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 
 Limits worth knowing:
 
-- Hosted API mode is still local-first by default; production auth and deployed worker scheduling are future work.
+- Hosted API mode is still local-first by default; deployed worker scheduling and broader production auth are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
@@ -274,4 +276,4 @@ Limits worth knowing:
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
 4. Deeper charting and report visualization polish.
-5. Deployed worker scheduling and production auth.
+5. Deployed worker scheduling and broader production auth.

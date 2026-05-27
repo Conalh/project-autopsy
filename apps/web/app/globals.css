@@ -477,6 +477,35 @@ button {
   margin-bottom: 16px;
 }
 
+.ops-access-panel {
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+}
+
+.ops-auth-notice {
+  display: grid;
+  gap: 4px;
+  border-left-width: 4px;
+}
+
+.ops-auth-notice strong {
+  color: var(--strong);
+}
+
+.ops-auth-notice p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.ops-auth-local {
+  border-left-color: var(--warning);
+}
+
+.ops-auth-enforced {
+  border-left-color: var(--ok);
+}
+
 .ops-storage {
   border: 1px solid #ccd4e1;
   border-radius: 999px;

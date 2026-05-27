@@ -1,10 +1,17 @@
+import { headers } from "next/headers";
 import Link from "next/link";
+import { evaluateAdminAuth, type AdminAuthResult } from "../lib/admin-auth";
 import { createWebAnalysisJobStore, listAnalysisJobs, type AnalysisJob } from "../lib/analysis-queue";
 import { buildOperationsSummary, type OperationsAlert, type OperationsSummary } from "./operations-summary";
 
 export const dynamic = "force-dynamic";
 
 export default async function OperationsPage() {
+  const adminAuth = evaluateAdminAuth(await headers());
+  if (!adminAuth.authorized) {
+    return <OperationsAccessRequired />;
+  }
+
   const store = await createWebAnalysisJobStore({});
   const storageMode = store ? "postgres" : "memory";
   const jobs = store ? await store.listJobs(20) : listAnalysisJobs(20);
@@ -27,10 +34,43 @@ export default async function OperationsPage() {
         </div>
       </header>
 
+      <AdminAuthNotice auth={adminAuth} />
       <OperationsSummaryPanel summary={summary} />
       <OperationsAlertsPanel alerts={summary.alerts} />
       <RecentJobsPanel jobs={jobs} />
     </main>
+  );
+}
+
+function OperationsAccessRequired() {
+  return (
+    <main className="shell">
+      <nav className="top-nav" aria-label="Primary">
+        <Link href="/">Inspector</Link>
+        <Link href="/runs">Saved runs</Link>
+      </nav>
+      <section className="panel ops-panel ops-access-panel">
+        <p className="eyebrow">Project Autopsy</p>
+        <h1>Operations access required</h1>
+        <p className="muted">
+          This deployment requires an admin token for operational views. Send it as a bearer token or as
+          <code>x-project-autopsy-admin-token</code>.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function AdminAuthNotice({ auth }: { auth: AdminAuthResult }) {
+  return (
+    <section className={`panel ops-panel ops-auth-notice ${auth.configured ? "ops-auth-enforced" : "ops-auth-local"}`}>
+      <strong>{auth.configured ? "Admin auth enforced" : "Local operations mode"}</strong>
+      <p>
+        {auth.configured
+          ? "Operational views require PROJECT_AUTOPSY_ADMIN_TOKEN."
+          : "Set PROJECT_AUTOPSY_ADMIN_TOKEN to require an admin token for operational views."}
+      </p>
+    </section>
   );
 }
 
