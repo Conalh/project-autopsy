@@ -141,6 +141,8 @@ Invoke-RestMethod `
 | Route | Purpose |
 | --- | --- |
 | `POST /api/repositories/inspect` | Inspect a local path or GitHub URL and return `{ report }` or `{ run, report }` |
+| `POST /api/repositories/inspect` with `{ "queue": true }` | Queue an inspection and return `{ job }` with HTTP `202` |
+| `GET /api/jobs/{id}` | Poll an in-process queued inspection job |
 | `GET /api/runs/{id}` | Load a saved run as JSON |
 | `GET /api/runs/{id}/export.md` | Load a saved run as Markdown |
 
@@ -238,13 +240,14 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Reports export as Markdown and JSON.
 - Saved run history is backed by local SQLite.
 - Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
+- API inspections can run through an in-process queue and be polled by job id.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
 
-- Hosted API mode is still local-first by default; production auth and queues are future work.
+- Hosted API mode is still local-first by default; production auth and durable queue workers are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App auth is env-backed; the browser installation flow is not implemented yet.
@@ -256,4 +259,4 @@ Limits worth knowing:
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
 4. Browser GitHub App installation flow for hosted/private repo access.
-5. Hosted queueing for long-running repository analysis.
+5. Durable hosted queue workers for long-running repository analysis.

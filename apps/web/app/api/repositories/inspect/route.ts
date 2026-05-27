@@ -1,4 +1,5 @@
 import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
+import { enqueueAnalysisJob } from "../../../lib/analysis-queue";
 import { createWebRunStore } from "../../../lib/run-store";
 import { resolveGitHubToken } from "../../../lib/github-auth";
 
@@ -7,6 +8,7 @@ interface InspectRequestBody {
   branch?: unknown;
   save?: unknown;
   checkRegistry?: unknown;
+  queue?: unknown;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -28,20 +30,37 @@ export async function POST(request: Request): Promise<Response> {
       token: await resolveGitHubToken()
     };
 
-    if (body.save === true) {
-      const saved = await analyzeAndSaveRepository(body.source, {
-        ...options,
-        store: await createWebRunStore()
-      });
-      const { markdown, json, ...run } = saved;
-      return jsonResponse({ run, report: saved.report });
+    if (body.queue === true) {
+      const job = enqueueAnalysisJob(() => inspectRepository(body.source as string, body.save === true, options));
+      return jsonResponse({ job }, 202);
     }
 
-    const report = await analyzeRepository(body.source, options);
-    return jsonResponse({ report });
+    return jsonResponse(await inspectRepository(body.source, body.save === true, options));
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);
   }
+}
+
+async function inspectRepository(
+  source: string,
+  save: boolean,
+  options: {
+    branch?: string;
+    checkDependencyRegistry: boolean;
+    token?: string;
+  }
+) {
+  if (save) {
+    const saved = await analyzeAndSaveRepository(source, {
+      ...options,
+      store: await createWebRunStore()
+    });
+    const { markdown, json, ...run } = saved;
+    return { run, report: saved.report };
+  }
+
+  const report = await analyzeRepository(source, options);
+  return { report };
 }
 
 function jsonResponse(body: unknown, status = 200): Response {

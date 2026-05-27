@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { POST } from "./route";
+import { clearAnalysisJobs, waitForAnalysisJob } from "../../../lib/analysis-queue";
+import { GET as getJob } from "../../jobs/[id]/route";
 import { GET as getRun } from "../../runs/[id]/route";
 import { GET as exportMarkdown } from "../../runs/[id]/export.md/route";
 
@@ -57,6 +59,40 @@ describe("hosted API routes", () => {
       expect(await exported.text()).toContain("# Project Autopsy: Stalled Notes App");
     } finally {
       delete process.env.PROJECT_AUTOPSY_RUN_DB_PATH;
+    }
+  });
+
+  test("queues an inspection and exposes job status", async () => {
+    clearAnalysisJobs();
+    process.env.PROJECT_AUTOPSY_RUN_DB_PATH = path.join(
+      await mkdtemp(path.join(tmpdir(), "project-autopsy-api-queue-")),
+      "runs.sqlite"
+    );
+
+    try {
+      const queued = await POST(
+        jsonRequest("http://localhost/api/repositories/inspect", {
+          source: fixturePath,
+          save: true,
+          queue: true
+        })
+      );
+      const queuedBody = await queued.json();
+      await waitForAnalysisJob(queuedBody.job.id);
+      const status = await getJob(new Request(`http://localhost/api/jobs/${queuedBody.job.id}`), {
+        params: Promise.resolve({ id: queuedBody.job.id })
+      });
+      const statusBody = await status.json();
+
+      expect(queued.status).toBe(202);
+      expect(queuedBody.job.id).toMatch(/^job_/);
+      expect(status.status).toBe(200);
+      expect(statusBody.job.status).toBe("completed");
+      expect(statusBody.job.result.report.summary.projectName).toBe("Stalled Notes App");
+      expect(statusBody.job.result.run.id).toMatch(/^run_/);
+    } finally {
+      delete process.env.PROJECT_AUTOPSY_RUN_DB_PATH;
+      clearAnalysisJobs();
     }
   });
 
