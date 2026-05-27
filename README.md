@@ -1,4 +1,4 @@
-# Project Autopsy [![ci](https://github.com/Conalh/project-autopsy/actions/workflows/ci.yml/badge.svg)](https://github.com/Conalh/project-autopsy/actions/workflows/ci.yml) [![coverage](https://img.shields.io/badge/Coverage-CI%20artifact-0f766e)](.github/workflows/ci.yml) [![typescript](https://img.shields.io/badge/TypeScript-5.9-blue)](tsconfig.base.json) [![next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](apps/web/package.json) [![node](https://img.shields.io/badge/Node.js-24-green?logo=node.js)](package.json) [![vitest](https://img.shields.io/badge/Vitest-tested-6E9F18?logo=vitest)](package.json) [![sqlite](https://img.shields.io/badge/SQLite-run%20history-003B57?logo=sqlite)](packages/core/src/store/sqlite-run-store.ts)
+# Project Autopsy [![ci](https://github.com/Conalh/project-autopsy/actions/workflows/ci.yml/badge.svg)](https://github.com/Conalh/project-autopsy/actions/workflows/ci.yml) [![coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FConalh%2Fproject-autopsy%2Fmaster%2F.github%2Fbadges%2Fcoverage.json)](.github/badges/coverage.json) [![typescript](https://img.shields.io/badge/TypeScript-5.9-blue)](tsconfig.base.json) [![next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](apps/web/package.json) [![node](https://img.shields.io/badge/Node.js-24-green?logo=node.js)](package.json) [![vitest](https://img.shields.io/badge/Vitest-tested-6E9F18?logo=vitest)](package.json) [![sqlite](https://img.shields.io/badge/SQLite-run%20history-003B57?logo=sqlite)](packages/core/src/store/sqlite-run-store.ts)
 
 **An evidence-backed autopsy report for stale software repositories.** Project Autopsy inspects a local path, public GitHub URL, or token-backed private GitHub repo, then turns the file tree, manifests, docs, commit history, and dependency signals into a structured diagnosis: score, verdict, findings, stall hypotheses, revival tasks, and source evidence.
 
@@ -236,10 +236,11 @@ The core owns product behavior. CLI, web pages, and API routes are thin surfaces
 npm test
 npm run build
 npm run coverage
+npm run coverage:badge
 npm run samples:check
 ```
 
-The GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the same build, test, coverage, and sample-report drift checks on pushes, pull requests, and manual dispatches. Coverage reports are uploaded as a CI artifact.
+The GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the same build, test, coverage, coverage-badge drift, and sample-report drift checks on pushes, pull requests, and manual dispatches. Coverage reports are uploaded as a CI artifact, and the public README badge is backed by [`.github/badges/coverage.json`](.github/badges/coverage.json).
 
 Current coverage focus:
 
@@ -278,6 +279,6 @@ Limits worth knowing:
 
 1. Deeper timeline and dependency visualization polish.
 2. Registry-backed drift checks for Go and .NET.
-3. Coverage and badge polish for the public GitHub surface.
+3. Coverage threshold policy and package-level coverage notes.
 4. Deeper charting and report visualization polish.
 5. Broader production auth and deployment hardening.

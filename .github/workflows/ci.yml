@@ -38,6 +38,9 @@ jobs:
       - name: Run coverage
         run: npm run coverage
 
+      - name: Check coverage badge
+        run: npm run coverage:badge:check
+
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
