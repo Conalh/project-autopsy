@@ -4,7 +4,7 @@ import {
   enqueueWebAnalysisJob,
   type PostgresQueryClient
 } from "./analysis-queue";
-import { processNextAnalysisJob } from "./analysis-worker";
+import { processAnalysisWorkerBatch, processNextAnalysisJob } from "./analysis-worker";
 
 describe("analysis worker", () => {
   test("claims and processes the next persisted queued analysis job", async () => {
@@ -97,6 +97,63 @@ describe("analysis worker", () => {
       error: "permanent failure"
     });
   });
+
+  test("processes a bounded worker batch and reports metrics", async () => {
+    const client = new FakePostgresClient();
+    const store = createPostgresAnalysisJobStore(client);
+    await store.createJob({
+      id: "job_done",
+      status: "queued",
+      createdAt: "2026-05-27T00:00:00.000Z",
+      updatedAt: "2026-05-27T00:00:00.000Z",
+      payload: {
+        source: "done",
+        save: false,
+        checkDependencyRegistry: false
+      }
+    });
+    await store.createJob({
+      id: "job_retry",
+      status: "queued",
+      createdAt: "2026-05-27T00:01:00.000Z",
+      updatedAt: "2026-05-27T00:01:00.000Z",
+      maxAttempts: 2,
+      payload: {
+        source: "retry",
+        save: false,
+        checkDependencyRegistry: false
+      }
+    });
+    await store.createJob({
+      id: "job_old",
+      status: "failed",
+      createdAt: "2026-05-20T00:00:00.000Z",
+      updatedAt: "2026-05-20T00:00:00.000Z"
+    });
+
+    const metrics = await processAnalysisWorkerBatch({
+      postgresClient: client,
+      maxJobs: 2,
+      cleanupTerminalJobsOlderThan: "2026-05-21T00:00:00.000Z",
+      inspect: async (payload) => {
+        if (payload.source === "retry") {
+          throw new Error("try again");
+        }
+
+        return { report: { summary: { projectName: payload.source } } };
+      }
+    });
+
+    expect(metrics).toEqual({
+      claimed: 2,
+      completed: 1,
+      failed: 0,
+      requeued: 1,
+      cleaned: 1,
+      empty: false
+    });
+    await expect(store.getJob("job_old")).resolves.toBeUndefined();
+  });
 });
 
 interface AnalysisJobRow {
@@ -167,6 +224,19 @@ class FakePostgresClient implements PostgresQueryClient {
       };
       this.rows.set(row.id, row);
       return { rows: [row as Row] };
+    }
+
+    if (text.includes("DELETE FROM analysis_jobs")) {
+      const cutoff = String(values[0]);
+      let count = 0;
+      for (const [id, row] of [...this.rows.entries()]) {
+        if ((row.status === "completed" || row.status === "failed") && row.updated_at < cutoff) {
+          this.rows.delete(id);
+          count += 1;
+        }
+      }
+
+      return { rows: [{ deleted_count: count } as Row] };
     }
 
     if (text.includes("SELECT") && text.includes("analysis_jobs")) {

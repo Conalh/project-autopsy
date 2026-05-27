@@ -250,6 +250,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Saved run history is backed by local SQLite.
 - Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
 - API inspections can run through a queue and be polled by job id; hosted mode persists job payload, state, result, errors, and retry attempts in Postgres.
+- External workers can process bounded job batches with completion/failure/requeue metrics and terminal-job cleanup.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
 - Web UI includes saved-run browsing, GitHub setup state, and report section navigation.
@@ -257,7 +258,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 
 Limits worth knowing:
 
-- Hosted API mode is still local-first by default; production auth and worker process supervision are future work.
+- Hosted API mode is still local-first by default; production auth and deployed worker scheduling are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
@@ -268,5 +269,5 @@ Limits worth knowing:
 1. Report polish for timeline and dependency-focused views.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
-4. Worker process supervision, metrics, and retention scheduling for hosted analysis.
-5. Shareable report views, comparison flows, and chart polish.
+4. Shareable report views, comparison flows, and chart polish.
+5. Deployed worker scheduling, production auth, and operational dashboards.

@@ -12,6 +12,20 @@ interface ProcessNextAnalysisJobOptions extends WebAnalysisJobQueueOptions {
   inspect?: (payload: RepositoryInspectionJobPayload) => Promise<unknown>;
 }
 
+interface ProcessAnalysisWorkerBatchOptions extends ProcessNextAnalysisJobOptions {
+  maxJobs?: number;
+  cleanupTerminalJobsOlderThan?: string;
+}
+
+export interface AnalysisWorkerBatchMetrics {
+  claimed: number;
+  completed: number;
+  failed: number;
+  requeued: number;
+  cleaned: number;
+  empty: boolean;
+}
+
 export async function processNextAnalysisJob(
   options: ProcessNextAnalysisJobOptions = {}
 ): Promise<AnalysisJob | undefined> {
@@ -46,6 +60,50 @@ export async function processNextAnalysisJob(
   }
 }
 
+export async function processAnalysisWorkerBatch(
+  options: ProcessAnalysisWorkerBatchOptions = {}
+): Promise<AnalysisWorkerBatchMetrics> {
+  const store = await createWebAnalysisJobStore(options);
+  if (!store) {
+    throw new Error("PROJECT_AUTOPSY_POSTGRES_URL or DATABASE_URL is required for external analysis workers.");
+  }
+
+  const metrics: AnalysisWorkerBatchMetrics = {
+    claimed: 0,
+    completed: 0,
+    failed: 0,
+    requeued: 0,
+    cleaned: 0,
+    empty: false
+  };
+
+  if (options.cleanupTerminalJobsOlderThan) {
+    metrics.cleaned = await store.cleanupTerminalJobs({
+      olderThan: options.cleanupTerminalJobsOlderThan
+    });
+  }
+
+  const maxJobs = normalizeMaxJobs(options.maxJobs);
+  for (let index = 0; index < maxJobs; index += 1) {
+    const processed = await processNextAnalysisJob(options);
+    if (!processed) {
+      metrics.empty = true;
+      break;
+    }
+
+    metrics.claimed += 1;
+    if (processed.status === "completed") {
+      metrics.completed += 1;
+    } else if (processed.status === "failed") {
+      metrics.failed += 1;
+    } else if (processed.status === "queued") {
+      metrics.requeued += 1;
+    }
+  }
+
+  return metrics;
+}
+
 function readRepositoryInspectionPayload(payload: unknown): RepositoryInspectionJobPayload {
   if (!payload || typeof payload !== "object") {
     throw new Error("Analysis job payload is missing.");
@@ -64,4 +122,8 @@ function readRepositoryInspectionPayload(payload: unknown): RepositoryInspection
       : {}),
     checkDependencyRegistry: candidate.checkDependencyRegistry === true
   };
+}
+
+function normalizeMaxJobs(value: number | undefined): number {
+  return value && value > 0 ? Math.floor(value) : 1;
 }
