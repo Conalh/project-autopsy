@@ -1,5 +1,6 @@
 import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
 import { createWebRunStore } from "../../../lib/run-store";
+import { resolveGitHubToken } from "../../../lib/github-auth";
 
 interface InspectRequestBody {
   source?: unknown;
@@ -20,13 +21,13 @@ export async function POST(request: Request): Promise<Response> {
     return jsonResponse({ error: "Request body must include a non-empty source string." }, 400);
   }
 
-  const options = {
-    branch: typeof body.branch === "string" && body.branch.trim().length > 0 ? body.branch : undefined,
-    checkDependencyRegistry: body.checkRegistry === true,
-    token: process.env.PROJECT_AUTOPSY_GITHUB_TOKEN
-  };
-
   try {
+    const options = {
+      branch: typeof body.branch === "string" && body.branch.trim().length > 0 ? body.branch : undefined,
+      checkDependencyRegistry: body.checkRegistry === true,
+      token: await resolveGitHubToken()
+    };
+
     if (body.save === true) {
       const saved = await analyzeAndSaveRepository(body.source, {
         ...options,

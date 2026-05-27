@@ -2,6 +2,7 @@ import path from "node:path";
 import Link from "next/link";
 import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
 import { createWebRunStore } from "../lib/run-store";
+import { resolveGitHubToken } from "../lib/github-auth";
 import { ReportView } from "./report-view";
 
 export const dynamic = "force-dynamic";
@@ -34,11 +35,13 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
   }
 
   try {
+    const token = await resolveGitHubToken();
+
     if (params.save === "1") {
       const saved = await analyzeAndSaveRepository(source, {
         branch: params.branch,
         checkDependencyRegistry: params.checkRegistry === "1",
-        token: process.env.PROJECT_AUTOPSY_GITHUB_TOKEN,
+        token,
         store: createWebRunStore()
       });
       return <ReportView report={saved.report} savedRunId={saved.id} />;
@@ -47,7 +50,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     const report = await analyzeRepository(source, {
       branch: params.branch,
       checkDependencyRegistry: params.checkRegistry === "1",
-      token: process.env.PROJECT_AUTOPSY_GITHUB_TOKEN
+      token
     });
     return <ReportView report={report} />;
   } catch (error) {

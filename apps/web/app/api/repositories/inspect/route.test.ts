@@ -71,6 +71,28 @@ describe("hosted API routes", () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe("Request body must include a non-empty source string.");
   });
+
+  test("returns JSON errors for invalid GitHub App configuration", async () => {
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_ID = "123";
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID = "456";
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY = "not-a-private-key";
+
+    try {
+      const response = await POST(
+        jsonRequest("http://localhost/api/repositories/inspect", {
+          source: fixturePath
+        })
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.error).toMatch(/DECODER|PEM|unsupported/i);
+    } finally {
+      delete process.env.PROJECT_AUTOPSY_GITHUB_APP_ID;
+      delete process.env.PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID;
+      delete process.env.PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY;
+    }
+  });
 });
 
 function jsonRequest(url: string, body: unknown): Request {

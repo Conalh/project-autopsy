@@ -86,6 +86,16 @@ $env:PROJECT_AUTOPSY_GITHUB_TOKEN="<token>"
 node apps\cli\dist\index.js inspect https://github.com/owner/private-repo
 ```
 
+The web/API surface also supports GitHub App installation tokens through environment configuration. A personal access token takes precedence when both modes are configured:
+
+```powershell
+$env:PROJECT_AUTOPSY_GITHUB_APP_ID="<app-id>"
+$env:PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID="<installation-id>"
+$env:PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH="C:\path\to\github-app-private-key.pem"
+```
+
+Inline private keys are supported with `PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY`; escaped `\n` sequences are normalized before signing.
+
 ### Dependency Freshness
 
 Registry checks are opt-in. Today they query npm and PyPI, then compare declared package ranges against each registry's latest published version.
@@ -226,6 +236,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Reports export as Markdown and JSON.
 - Saved run history is backed by local SQLite.
 - Web and API routes reuse the same core package.
+- Web/API GitHub auth supports either a PAT or GitHub App installation token.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -233,7 +244,7 @@ Limits worth knowing:
 - Hosted API mode is local-first and file-backed; production auth, queues, and Postgres are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
-- Full GitHub App installation is not implemented yet.
+- GitHub App auth is env-backed; the browser installation flow is not implemented yet.
 - Web UI polish is intentionally behind the core/report contract.
 
 ## Roadmap
@@ -241,5 +252,5 @@ Limits worth knowing:
 1. Report polish for timeline and dependency-focused views.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
-4. GitHub App installation for hosted/private repo access.
+4. Browser GitHub App installation flow for hosted/private repo access.
 5. Hosted queues and Postgres-backed run storage.
