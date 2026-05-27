@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { createWebRunStore } from "../lib/run-store";
+import { buildRunTrendItems, buildRunTrendSummary, type RunTrendItem } from "./run-trends";
 
 export const dynamic = "force-dynamic";
 
 export default async function RunsPage() {
   const runs = await (await createWebRunStore()).listRuns(50);
+  const trendItems = buildRunTrendItems(runs);
+  const trendSummary = buildRunTrendSummary(trendItems);
 
   return (
     <main className="shell">
@@ -28,6 +31,38 @@ export default async function RunsPage() {
           <input id="right-run" name="right" type="text" placeholder="run_..." required />
           <button type="submit">Compare</button>
         </form>
+      </section>
+
+      <section className="panel run-trend-panel">
+        <div className="section-title-row">
+          <h2>Recent score trend</h2>
+          <span className="ops-storage">{trendSummary.itemCount} runs</span>
+        </div>
+        {trendItems.length > 0 ? (
+          <>
+            <dl className="run-trend-summary">
+              <div>
+                <dt>Latest score</dt>
+                <dd>{trendSummary.latestScore}/100</dd>
+              </div>
+              <div>
+                <dt>Latest delta</dt>
+                <dd className={deltaClass(trendSummary.latestDelta ?? 0)}>{formatDelta(trendSummary.latestDelta ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Best saved score</dt>
+                <dd>{trendSummary.bestScore}/100</dd>
+              </div>
+            </dl>
+            <div className="run-trend-list" aria-label="Recent saved run score trend">
+              {trendItems.map((item) => (
+                <RunTrendRow key={item.id} item={item} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="muted">No saved runs yet. Save repeated inspections to build a score trend.</p>
+        )}
       </section>
 
       <section className="panel">
@@ -57,4 +92,40 @@ export default async function RunsPage() {
       </section>
     </main>
   );
+}
+
+function RunTrendRow({ item }: { item: RunTrendItem }) {
+  return (
+    <Link className="run-trend-row" href={`/runs/${item.id}`}>
+      <span>
+        <strong>{item.dateLabel}</strong>
+        <em>{item.projectName}</em>
+      </span>
+      <span className="run-trend-track" aria-hidden="true">
+        <span className={`run-trend-fill status-fill-${item.verdictStatus}`} style={{ width: `${item.score}%` }} />
+      </span>
+      <span className="run-trend-score">{item.score}/100</span>
+      <span className={deltaClass(item.scoreDelta ?? 0)}>{item.scoreDelta === undefined ? "baseline" : formatDelta(item.scoreDelta)}</span>
+    </Link>
+  );
+}
+
+function formatDelta(value: number): string {
+  if (value > 0) {
+    return `+${value}`;
+  }
+
+  return String(value);
+}
+
+function deltaClass(value: number): string {
+  if (value > 0) {
+    return "delta-positive";
+  }
+
+  if (value < 0) {
+    return "delta-negative";
+  }
+
+  return "delta-neutral";
 }
