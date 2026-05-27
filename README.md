@@ -1,82 +1,88 @@
-# Project Autopsy
+# Project Autopsy [![typescript](https://img.shields.io/badge/TypeScript-5.9-blue)](tsconfig.base.json) [![next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](apps/web/package.json) [![node](https://img.shields.io/badge/Node.js-24-green?logo=node.js)](package.json) [![vitest](https://img.shields.io/badge/Vitest-tested-6E9F18?logo=vitest)](package.json) [![sqlite](https://img.shields.io/badge/SQLite-run%20history-003B57?logo=sqlite)](packages/core/src/store/sqlite-run-store.ts)
 
-Project Autopsy is a developer tool for making old, stalled, or abandoned repositories legible again.
+**An evidence-backed autopsy report for stale software repositories.** Project Autopsy inspects a local path, public GitHub URL, or token-backed private GitHub repo, then turns the file tree, manifests, docs, commit history, and dependency signals into a structured diagnosis: score, verdict, findings, stall hypotheses, revival tasks, and source evidence.
 
-It inspects a local or public GitHub repository, gathers evidence from the file tree, package manifests, documentation, and git history, then produces an autopsy report with a score, verdict, findings, stall hypotheses, revival tasks, and source evidence.
+> **Local-first demo path:** `npm install` -> `npm run build` -> `npm run inspect:fixture`. The fixture report is deterministic and committed under [`docs/sample-reports`](docs/sample-reports), so report drift is reviewable.
 
-The current version is a working CLI/core/web slice. It is intentionally small, deterministic, and evidence-first.
+```mermaid
+flowchart LR
+  Local["Local repo path"] --> Ingest
+  GitHub["GitHub repo URL"] --> Ingest
+  Private["Private repo + token"] --> Ingest
+  Ingest["Ingestion\nfiles / docs / manifests / commits"] --> Core[("Analysis core")]
+  Core --> Detectors["Detectors\nidentity / setup / validation / docs / drift"]
+  Detectors --> Report["Autopsy report\nscore / findings / revival plan"]
+  Report --> CLI["CLI\nMarkdown / JSON"]
+  Report --> Web["Next.js report UI"]
+  Report --> API["API routes\ninspect / runs / export.md"]
+  Report --> Store[("SQLite\nsaved runs")]
+```
 
-## What Works Today
+**See also:** [sample Markdown report](docs/sample-reports/stalled-npm-app.md) / [sample JSON report](docs/sample-reports/stalled-npm-app.json) / [implementation plan](PLAN.md) / [fixtures](fixtures)
 
-- Local repository inspection
-- Public GitHub repository inspection
-- GitHub URL parsing with optional branch selection
-- File tree classification
-- npm, Python, Rust, Go, and .NET manifest parsing
-- README and docs discovery
-- Git commit summary extraction when history is available
-- First-pass detectors for:
-  - project identity
-  - setup risk
-  - validation surface
-  - docs drift
-  - latest visible momentum
-- Markdown report generation
-- JSON report export
-- Dependency snapshot in reports
-- Committed sample reports for regression review
-- Opt-in npm registry freshness checks
-- CLI command for local and public GitHub inspection
-- Web report surface for public GitHub repos and the fixture demo
-- Token-backed private GitHub repository inspection
-- Hosted-style JSON API routes over the core report contract
-- SQLite-backed saved analysis runs
-- Recent-run loading in the CLI and web UI
+## Why This Exists
 
-## Quick Start
+Old repos usually do not fail for mysterious reasons. They stall because setup rots, scripts disappear, dependency versions drift, docs overpromise, tests never land, or the next useful task is unclear.
+
+Project Autopsy makes that state legible. It does not run arbitrary project commands. It reads the repository, cites what it saw, and produces the first useful revival plan:
+
+- What was this project trying to become?
+- What is actually present in the tree?
+- Where are setup, validation, docs, and dependency risks?
+- Which evidence supports the diagnosis?
+- What should be fixed first?
+
+## Run It
+
+### Deterministic Fixture
 
 ```powershell
 npm install
 npm run build
-node apps\cli\dist\index.js inspect . --format markdown
+npm run inspect:fixture
+npm run inspect:fixture:json
 ```
 
-You can inspect another local repository by replacing `.` with a path:
+The fixture report comes from [`fixtures/stalled-npm-app`](fixtures/stalled-npm-app) and should match the committed samples:
 
 ```powershell
-node apps\cli\dist\index.js inspect C:\path\to\old-repo --format markdown
+npm run samples:check
+```
+
+### Local Repository
+
+```powershell
+node apps\cli\dist\index.js inspect . --format markdown
 node apps\cli\dist\index.js inspect C:\path\to\old-repo --format json
 ```
 
-Or inspect a public GitHub repository:
+### GitHub Repository
 
 ```powershell
 node apps\cli\dist\index.js inspect https://github.com/octocat/Hello-World --format markdown
 node apps\cli\dist\index.js inspect https://github.com/owner/repo --branch main --format markdown
 ```
 
-Inspect a private GitHub repository with a token:
+Private repositories can be inspected with a token:
 
 ```powershell
 node apps\cli\dist\index.js inspect https://github.com/owner/private-repo --github-token <token>
+
 $env:PROJECT_AUTOPSY_GITHUB_TOKEN="<token>"
 node apps\cli\dist\index.js inspect https://github.com/owner/private-repo
 ```
 
-Opt into npm registry-backed dependency freshness checks:
+### Dependency Freshness
+
+Registry checks are opt-in. Today they query npm only and compare declared package ranges against the registry `latest` dist-tag.
 
 ```powershell
 node apps\cli\dist\index.js inspect . --format markdown --check-registry
 ```
 
-For a deterministic demo that does not depend on the current repo state:
+Registry failures become informational findings instead of blocking the report.
 
-```powershell
-npm run inspect:fixture
-npm run inspect:fixture:json
-```
-
-Save an analysis run and reload it later:
+### Saved Runs
 
 ```powershell
 node apps\cli\dist\index.js inspect . --format json --save
@@ -84,19 +90,35 @@ node apps\cli\dist\index.js runs
 node apps\cli\dist\index.js show <run_id> --format markdown
 ```
 
-Run the web app:
+Saved runs live in `.project-autopsy/runs.sqlite` by default and are ignored by git.
+
+## Web And API
+
+Start the Next.js app:
 
 ```powershell
 npm run web:dev
 ```
 
-Inspect through the local API:
+The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check npm registry freshness, then open the report.
+
+The same report contract is exposed through local API routes:
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/repositories/inspect -ContentType "application/json" -Body '{"source":"https://github.com/owner/repo","save":true}'
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:3000/api/repositories/inspect `
+  -ContentType "application/json" `
+  -Body '{"source":"https://github.com/owner/repo","save":true}'
 ```
 
-## Example Output
+| Route | Purpose |
+| --- | --- |
+| `POST /api/repositories/inspect` | Inspect a local path or GitHub URL and return `{ report }` or `{ run, report }` |
+| `GET /api/runs/{id}` | Load a saved run as JSON |
+| `GET /api/runs/{id}/export.md` | Load a saved run as Markdown |
+
+## What The Report Contains
 
 ```markdown
 # Project Autopsy: Stalled Notes App
@@ -105,8 +127,6 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/repositories/inspe
 
 **Score:** 17/100
 **Status:** at-risk
-
-This repo is reviveable, but 2 high-severity issue(s) should be handled before feature work.
 
 ## Top Findings
 
@@ -123,113 +143,86 @@ This repo is reviveable, but 2 high-severity issue(s) should be handled before f
 - [EV-003] README.md - npm run dev
 ```
 
-## Architecture
+The real report also includes a project snapshot, dependency snapshot, ranked stall hypotheses, evidence IDs, expected outcomes, and verification commands.
 
-This is an npm workspace with a shared TypeScript analysis core and a thin CLI wrapper.
+## Analysis Model
+
+The core package produces a normalized `RepoSnapshot` first, then runs detectors over that snapshot. All report surfaces consume the same `AutopsyReport` object.
+
+| Detector | Signals |
+| --- | --- |
+| Project identity | README title, first purpose paragraph, package metadata |
+| Momentum break | Last visible commit when local git history or GitHub commits are available |
+| Setup risk | README commands, package scripts, lockfiles, missing test script |
+| Validation surface | Source files, test files, CI/workflow hints |
+| Docs drift | Referenced local files that do not exist in the snapshot |
+| Dependency drift | Opt-in npm registry latest-major checks |
+
+Every finding carries evidence. Evidence is promoted into a report-wide index, then findings and revival tasks reference it by stable IDs.
+
+## Manifest Coverage
+
+| Ecosystem | Files |
+| --- | --- |
+| npm | `package.json` |
+| Python | `pyproject.toml`, `requirements.txt` |
+| Rust | `Cargo.toml` |
+| Go | `go.mod` |
+| .NET | `.csproj`, `.sln` detection; `.csproj` package references |
+
+Parsed dependencies appear in the dependency snapshot. Non-npm registry freshness is intentionally not claimed yet.
+
+## Package Map
 
 ```text
 apps/
-  cli/              Command-line interface
-  web/              Next.js report interface
+  cli/              Node CLI wrapper around the core
+  web/              Next.js UI and API routes
 packages/
-  core/             Ingestion, detectors, report assembly, Markdown rendering
+  core/             Ingestion, detectors, report assembly, Markdown/JSON, SQLite store
+fixtures/           Stable local repositories for deterministic tests and samples
+docs/sample-reports/  Committed regression artifacts
 ```
 
-The core package owns the product behavior. The CLI only parses arguments, calls the core, and prints the report. That keeps the analysis engine reusable for a future web app or API.
+The core owns product behavior. CLI, web pages, and API routes are thin surfaces over the same report contract.
 
-## Current Status
-
-Goal 0 product skeleton is in place:
-
-- `apps/cli`: CLI entry point and CLI behavior tests
-- `packages/core`: shared TypeScript contracts, ingestion, detectors, report assembly, and Markdown rendering
-- `fixtures`: durable local test repositories for npm, Python, Rust, Go, and mixed-stack projects
-- `npm run inspect:fixture`: deterministic demo report from `fixtures/stalled-npm-app`
-
-Goal 1 ingestion is in place:
-
-- Local and public GitHub sources normalize into the same snapshot/report pipeline
-- GitHub ingestion reads repo metadata, recursive tree data, selected text docs, manifests, and recent commits
-- Hosted ingestion does not execute project commands
-
-Goal 3 report MVP is in place:
-
-- Reports include `metadata`, `summary`, `verdict`, `score`, `findings`, `stallHypotheses`, `revivalTasks`, and `evidenceIndex`
-- Findings and revival tasks have stable IDs
-- Markdown and JSON exports use the same structured report contract
-
-Goal 4 web surface is in place:
-
-- The first screen is a usable public GitHub repo inspector
-- The fixture demo opens the structured report without network access
-- Report pages show score, hypotheses, findings, revival tasks, exports, and evidence
-
-Goal 5 persistence is in place:
-
-- Saved analyses are written to a local SQLite database under `.project-autopsy/`
-- The CLI can save, list, and show analysis runs
-- The web app can save a report and reopen recent runs from the home page
-
-Goal 6 manifest parsing is in place:
-
-- Python `pyproject.toml` and `requirements.txt` dependencies normalize into report data
-- Rust `Cargo.toml`, Go `go.mod`, and .NET `.csproj` package references are parsed
-- Markdown and web reports include a dependency snapshot for supported manifests
-
-Goal 7 npm registry drift checks are in place:
-
-- `--check-registry` compares npm dependencies against the npm registry `latest` dist-tag
-- Major-version drift is reported as evidence-backed `dependency-drift` findings
-- Registry failures produce an informational not-checked finding instead of blocking analysis
-
-Goal 8 sample reports are in place:
-
-- `docs/sample-reports/stalled-npm-app.md` and `.json` are committed review artifacts
-- `npm run samples:update` refreshes sample reports from stable fixtures
-- `npm run samples:check` fails when committed samples drift from current report output
-
-Goal 9 private GitHub token support is in place:
-
-- CLI inspections accept `--github-token <token>`
-- CLI and web inspections read `PROJECT_AUTOPSY_GITHUB_TOKEN`
-- Private or missing GitHub repositories now return an authentication-oriented error message
-
-Goal 10 hosted API mode is in place:
-
-- `POST /api/repositories/inspect` returns `{ report }` or `{ run, report }`
-- `GET /api/runs/{id}` loads saved run JSON
-- `GET /api/runs/{id}/export.md` returns saved Markdown export
-
-## Commands
+## Tests
 
 ```powershell
-npm test       # Run core and CLI tests
-npm run build  # Compile all workspaces
-npm run check  # Build, then test
-npm run samples:check  # Verify committed sample reports are current
-npm run samples:update  # Refresh committed sample reports after intentional report changes
-npm run web:dev  # Start the Next.js report UI
-npm run inspect:fixture  # Print a deterministic fixture autopsy report
-npm run inspect:fixture:json  # Print the same report as JSON
-node apps\cli\dist\index.js inspect . --save  # Save an analysis run
-node apps\cli\dist\index.js runs  # List saved analysis runs
-node apps\cli\dist\index.js inspect . --check-registry  # Check npm registry freshness
-node apps\cli\dist\index.js inspect https://github.com/owner/private-repo --github-token <token>
+npm test
+npm run build
+npm run samples:check
 ```
 
-## Current Limits
+Current coverage focus:
 
-- Registry freshness is currently npm-only and opt-in.
-- Non-npm dependency versions are parsed and reported as declared, but not checked against registries yet.
+- Core ingestion, detectors, report schema, persistence, manifest parsing, dependency drift, and sample report drift.
+- CLI behavior for local paths, public GitHub, private token flow, save/list/show, and registry checks.
+- Web API route behavior for inspect, saved run JSON, Markdown export, and request validation.
+
+## Status
+
+Project Autopsy is currently a local-first portfolio/devtool slice:
+
+- Local and GitHub ingestion share one normalized snapshot pipeline.
+- Private GitHub repos work with a supplied token.
+- Reports export as Markdown and JSON.
+- Saved run history is backed by local SQLite.
+- Web and API routes reuse the same core package.
+- Sample reports are committed and regression-checked.
+
+Limits worth knowing:
+
 - Hosted API mode is local-first and file-backed; production auth, queues, and Postgres are future work.
-- Web UI polish is future work.
-- The analyzer never runs arbitrary commands from inspected repositories.
+- Registry freshness is npm-only and opt-in.
+- The analyzer never executes inspected repository commands.
 - Full GitHub App installation is not implemented yet.
+- Web UI polish is intentionally behind the core/report contract.
 
-## Next Milestones
+## Roadmap
 
-1. Add report polish for timeline and dependency-focused views.
-2. Extend registry-backed drift checks beyond npm.
-3. Add coverage and badge polish for the public GitHub surface.
-4. Add GitHub App installation for hosted/private repo access.
-5. Add hosted queues and Postgres-backed run storage.
+1. Report polish for timeline and dependency-focused views.
+2. Registry-backed drift checks beyond npm.
+3. Coverage and badge polish for the public GitHub surface.
+4. GitHub App installation for hosted/private repo access.
+5. Hosted queues and Postgres-backed run storage.
