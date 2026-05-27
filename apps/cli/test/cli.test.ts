@@ -14,7 +14,7 @@ async function createCliFixture(): Promise<string> {
   );
   await writeFile(
     path.join(repoPath, "package.json"),
-    JSON.stringify({ name: "cli-fixture", scripts: { build: "tsc" } }, null, 2)
+    JSON.stringify({ name: "cli-fixture", scripts: { build: "tsc" }, dependencies: { next: "^12.0.0" } }, null, 2)
   );
   await writeFile(path.join(repoPath, "src", "index.ts"), "export const fixture = true;\n");
 
@@ -88,6 +88,17 @@ describe("project-autopsy CLI", () => {
     expect(shown.exitCode).toBe(0);
     expect(shown.stdout).toContain("# Project Autopsy: CLI Fixture");
   });
+
+  test("checks npm registry drift when requested", async () => {
+    const repoPath = await createCliFixture();
+
+    const result = await runCli(["inspect", repoPath, "--format", "markdown", "--check-registry"], {
+      npmRegistryFetch: createNpmRegistryFetch({ next: "16.2.6" })
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("npm dependency is behind the latest major: next");
+  });
 });
 
 function createGitHubFetch(): typeof fetch {
@@ -141,6 +152,21 @@ function createGitHubFetch(): typeof fetch {
     }
 
     return new Response(JSON.stringify(responses.get(url)), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  }) as typeof fetch;
+}
+
+function createNpmRegistryFetch(latestVersions: Record<string, string>): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const packageName = decodeURIComponent(input.toString().split("/").pop() ?? "");
+    const latest = latestVersions[packageName];
+    if (!latest) {
+      return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+    }
+
+    return new Response(JSON.stringify({ "dist-tags": { latest } }), {
       status: 200,
       headers: { "content-type": "application/json" }
     });

@@ -24,6 +24,7 @@ The current version is a working CLI/core/web slice. It is intentionally small, 
 - Markdown report generation
 - JSON report export
 - Dependency snapshot in reports
+- Opt-in npm registry freshness checks
 - CLI command for local and public GitHub inspection
 - Web report surface for public GitHub repos and the fixture demo
 - SQLite-backed saved analysis runs
@@ -49,6 +50,12 @@ Or inspect a public GitHub repository:
 ```powershell
 node apps\cli\dist\index.js inspect https://github.com/octocat/Hello-World --format markdown
 node apps\cli\dist\index.js inspect https://github.com/owner/repo --branch main --format markdown
+```
+
+Opt into npm registry-backed dependency freshness checks:
+
+```powershell
+node apps\cli\dist\index.js inspect . --format markdown --check-registry
 ```
 
 For a deterministic demo that does not depend on the current repo state:
@@ -152,6 +159,12 @@ Goal 6 manifest parsing is in place:
 - Rust `Cargo.toml`, Go `go.mod`, and .NET `.csproj` package references are parsed
 - Markdown and web reports include a dependency snapshot for supported manifests
 
+Goal 7 npm registry drift checks are in place:
+
+- `--check-registry` compares npm dependencies against the npm registry `latest` dist-tag
+- Major-version drift is reported as evidence-backed `dependency-drift` findings
+- Registry failures produce an informational not-checked finding instead of blocking analysis
+
 ## Commands
 
 ```powershell
@@ -163,19 +176,21 @@ npm run inspect:fixture  # Print a deterministic fixture autopsy report
 npm run inspect:fixture:json  # Print the same report as JSON
 node apps\cli\dist\index.js inspect . --save  # Save an analysis run
 node apps\cli\dist\index.js runs  # List saved analysis runs
+node apps\cli\dist\index.js inspect . --check-registry  # Check npm registry freshness
 ```
 
 ## Current Limits
 
-- Dependency freshness is not registry-backed yet; parsed versions are reported as declared.
+- Registry freshness is currently npm-only and opt-in.
+- Non-npm dependency versions are parsed and reported as declared, but not checked against registries yet.
 - Hosted mode and web UI polish are future work.
 - The analyzer never runs arbitrary commands from inspected repositories.
 - Private GitHub repositories and GitHub App installation are not implemented yet.
 
 ## Next Milestones
 
-1. Add dependency drift rules that can query registries explicitly.
-2. Save rendered sample reports for regression review.
-3. Add private GitHub or GitHub App ingestion.
-4. Add a hosted API mode behind the same core report contract.
-5. Add report polish for timeline and dependency-focused views.
+1. Save rendered sample reports for regression review.
+2. Add private GitHub or GitHub App ingestion.
+3. Add a hosted API mode behind the same core report contract.
+4. Add report polish for timeline and dependency-focused views.
+5. Extend registry-backed drift checks beyond npm.

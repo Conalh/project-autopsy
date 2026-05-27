@@ -23,6 +23,7 @@ export async function runCli(args: string[], options: GitHubInspectionOptions = 
   const format = readFormat(rest);
   const branch = readOption(rest, "--branch");
   const dbPath = readOption(args, "--db");
+  const checkDependencyRegistry = args.includes("--check-registry");
 
   if (command === "runs") {
     const store = createSqliteRunStore(dbPath);
@@ -72,6 +73,7 @@ export async function runCli(args: string[], options: GitHubInspectionOptions = 
       const saved = await analyzeAndSaveRepository(targetPath, {
         ...options,
         branch,
+        checkDependencyRegistry,
         store
       });
       return {
@@ -81,7 +83,7 @@ export async function runCli(args: string[], options: GitHubInspectionOptions = 
       };
     }
 
-    const report = await analyzeRepository(targetPath, { ...options, branch });
+    const report = await analyzeRepository(targetPath, { ...options, branch, checkDependencyRegistry });
     return {
       exitCode: 0,
       stdout: format === "json" ? renderJsonReport(report) : renderMarkdownReport(report),
@@ -116,7 +118,7 @@ function usageFailure(): CliResult {
     stdout: "",
     stderr: [
       "Usage:",
-      "  project-autopsy inspect <path-or-github-url> [--branch name] [--format markdown|json] [--save] [--db path]",
+      "  project-autopsy inspect <path-or-github-url> [--branch name] [--format markdown|json] [--save] [--db path] [--check-registry]",
       "  project-autopsy runs [--db path]",
       "  project-autopsy show <run_id> [--format markdown|json] [--db path]",
       "",

@@ -31,6 +31,8 @@ export interface GitHubInspectionOptions {
   fetch?: typeof fetch;
   token?: string;
   branch?: string;
+  checkDependencyRegistry?: boolean;
+  npmRegistryFetch?: typeof fetch;
 }
 
 interface GitHubRepoResponse {

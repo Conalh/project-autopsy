@@ -1,4 +1,5 @@
 import { detectDocsDrift } from "../detect/docs-drift.js";
+import { detectDependencyDrift } from "../detect/dependency-drift.js";
 import { detectProjectIdentity } from "../detect/identity.js";
 import { detectMomentumBreak } from "../detect/momentum-break.js";
 import { detectSetupRisk } from "../detect/setup-risk.js";
@@ -33,7 +34,8 @@ export async function analyzeRepository(
     ...detectMomentumBreak(snapshot),
     ...detectSetupRisk(snapshot),
     ...detectValidationSurface(snapshot),
-    ...detectDocsDrift(snapshot)
+    ...detectDocsDrift(snapshot),
+    ...(await detectDependencyDrift(snapshot, options))
   ];
   const { findings, evidenceIndex } = assignEvidenceIds(rawFindings);
   const verdict = createVerdict(findings);

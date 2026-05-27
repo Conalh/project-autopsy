@@ -29,6 +29,10 @@ export default function HomePage() {
             <input name="save" type="checkbox" value="1" />
             Save this run
           </label>
+          <label className="check-row">
+            <input name="checkRegistry" type="checkbox" value="1" />
+            Check npm registry
+          </label>
           <label htmlFor="branch">Branch</label>
           <input id="branch" name="branch" type="text" placeholder="Default branch" />
         </form>

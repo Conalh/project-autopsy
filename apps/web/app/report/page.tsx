@@ -12,6 +12,7 @@ interface ReportPageProps {
     branch?: string;
     demo?: string;
     save?: string;
+    checkRegistry?: string;
   }>;
 }
 
@@ -36,12 +37,16 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     if (params.save === "1") {
       const saved = await analyzeAndSaveRepository(source, {
         branch: params.branch,
+        checkDependencyRegistry: params.checkRegistry === "1",
         store: createWebRunStore()
       });
       return <ReportView report={saved.report} savedRunId={saved.id} />;
     }
 
-    const report = await analyzeRepository(source, { branch: params.branch });
+    const report = await analyzeRepository(source, {
+      branch: params.branch,
+      checkDependencyRegistry: params.checkRegistry === "1"
+    });
     return <ReportView report={report} />;
   } catch (error) {
     return (
