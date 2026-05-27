@@ -24,6 +24,7 @@ The current version is a working CLI/core/web slice. It is intentionally small, 
 - Markdown report generation
 - JSON report export
 - Dependency snapshot in reports
+- Committed sample reports for regression review
 - Opt-in npm registry freshness checks
 - CLI command for local and public GitHub inspection
 - Web report surface for public GitHub repos and the fixture demo
@@ -165,12 +166,20 @@ Goal 7 npm registry drift checks are in place:
 - Major-version drift is reported as evidence-backed `dependency-drift` findings
 - Registry failures produce an informational not-checked finding instead of blocking analysis
 
+Goal 8 sample reports are in place:
+
+- `docs/sample-reports/stalled-npm-app.md` and `.json` are committed review artifacts
+- `npm run samples:update` refreshes sample reports from stable fixtures
+- `npm run samples:check` fails when committed samples drift from current report output
+
 ## Commands
 
 ```powershell
 npm test       # Run core and CLI tests
 npm run build  # Compile all workspaces
 npm run check  # Build, then test
+npm run samples:check  # Verify committed sample reports are current
+npm run samples:update  # Refresh committed sample reports after intentional report changes
 npm run web:dev  # Start the Next.js report UI
 npm run inspect:fixture  # Print a deterministic fixture autopsy report
 npm run inspect:fixture:json  # Print the same report as JSON
@@ -189,8 +198,8 @@ node apps\cli\dist\index.js inspect . --check-registry  # Check npm registry fre
 
 ## Next Milestones
 
-1. Save rendered sample reports for regression review.
-2. Add private GitHub or GitHub App ingestion.
-3. Add a hosted API mode behind the same core report contract.
-4. Add report polish for timeline and dependency-focused views.
-5. Extend registry-backed drift checks beyond npm.
+1. Add private GitHub or GitHub App ingestion.
+2. Add a hosted API mode behind the same core report contract.
+3. Add report polish for timeline and dependency-focused views.
+4. Extend registry-backed drift checks beyond npm.
+5. Add coverage and badge polish for the public GitHub surface.

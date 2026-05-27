@@ -1,0 +1,369 @@
+{
+  "metadata": {
+    "analyzerVersion": "0.3.0",
+    "reportSchemaVersion": "1.0",
+    "source": "local_path",
+    "generatedAt": "1970-01-01T00:00:00.000Z"
+  },
+  "verdict": {
+    "score": 17,
+    "status": "at-risk",
+    "summary": "This repo is reviveable, but 2 high-severity issue(s) should be handled before feature work."
+  },
+  "summary": {
+    "projectName": "Stalled Notes App",
+    "sourceType": "local_path",
+    "fileCount": 4,
+    "technologies": [
+      "next",
+      "npm",
+      "typescript"
+    ],
+    "findingCounts": {
+      "info": 1,
+      "low": 1,
+      "medium": 3,
+      "high": 2
+    }
+  },
+  "snapshot": {
+    "sourceType": "local_path",
+    "rootPath": "fixtures/stalled-npm-app",
+    "fileCount": 4,
+    "totalSizeBytes": 510,
+    "languages": {
+      "ts": 1
+    },
+    "files": [
+      {
+        "path": "docs/status.md",
+        "extension": ".md",
+        "sizeBytes": 58,
+        "kind": "docs"
+      },
+      {
+        "path": "package.json",
+        "extension": ".json",
+        "sizeBytes": 193,
+        "kind": "config"
+      },
+      {
+        "path": "README.md",
+        "extension": ".md",
+        "sizeBytes": 219,
+        "kind": "docs"
+      },
+      {
+        "path": "src/index.ts",
+        "extension": ".ts",
+        "sizeBytes": 40,
+        "kind": "source"
+      }
+    ],
+    "manifests": [
+      {
+        "path": "package.json",
+        "manager": "npm",
+        "parsed": {
+          "name": "stalled-notes",
+          "version": "0.1.0",
+          "scripts": {
+            "build": "tsc"
+          },
+          "dependencies": {
+            "next": "^12.0.0"
+          },
+          "devDependencies": {
+            "typescript": "^4.9.0"
+          }
+        },
+        "scripts": {
+          "build": "tsc"
+        },
+        "dependencies": {
+          "next": "^12.0.0"
+        },
+        "devDependencies": {
+          "typescript": "^4.9.0"
+        }
+      }
+    ],
+    "docs": [
+      {
+        "path": "docs/status.md",
+        "title": "Status",
+        "content": "# Status\n\nThe sync feature was planned but never started.\n"
+      },
+      {
+        "path": "README.md",
+        "title": "Stalled Notes App",
+        "content": "# Stalled Notes App\n\nA small note-taking app for developers who want a local scratchpad beside their editor.\n\n## Setup\n\nRun `npm install` and then `npm run dev`.\n\nThe dashboard screenshot lives at `docs/dashboard.png`.\n"
+      }
+    ],
+    "commits": [],
+    "summary": {
+      "projectName": "Stalled Notes App",
+      "claimedValue": "A small note-taking app for developers who want a local scratchpad beside their editor.",
+      "technologies": [
+        "next",
+        "npm",
+        "typescript"
+      ]
+    }
+  },
+  "findings": [
+    {
+      "kind": "project-identity",
+      "severity": "info",
+      "title": "Project identity: Stalled Notes App",
+      "body": "A small note-taking app for developers who want a local scratchpad beside their editor.",
+      "evidence": [
+        {
+          "kind": "docs",
+          "path": "README.md",
+          "excerpt": "A small note-taking app for developers who want a local scratchpad beside their editor.",
+          "id": "EV-001"
+        }
+      ],
+      "id": "FINDING-001",
+      "evidenceIds": [
+        "EV-001"
+      ]
+    },
+    {
+      "kind": "momentum-break",
+      "severity": "low",
+      "title": "No git history was available",
+      "body": "The analyzer could not read commit history for this local path.",
+      "evidence": [
+        {
+          "kind": "commit",
+          "excerpt": "git log returned no commits",
+          "id": "EV-002"
+        }
+      ],
+      "id": "FINDING-002",
+      "evidenceIds": [
+        "EV-002"
+      ]
+    },
+    {
+      "kind": "setup-risk",
+      "severity": "high",
+      "title": "README references missing npm script: npm run dev",
+      "body": "The setup instructions mention `npm run dev`, but package.json does not define a \"dev\" script.",
+      "evidence": [
+        {
+          "kind": "docs",
+          "path": "README.md",
+          "excerpt": "npm run dev",
+          "id": "EV-003"
+        },
+        {
+          "kind": "manifest",
+          "path": "package.json",
+          "excerpt": "Available scripts: build",
+          "id": "EV-004"
+        }
+      ],
+      "id": "FINDING-003",
+      "evidenceIds": [
+        "EV-003",
+        "EV-004"
+      ]
+    },
+    {
+      "kind": "setup-risk",
+      "severity": "medium",
+      "title": "Dependencies exist without a lockfile",
+      "body": "The project declares npm dependencies but does not include a recognized lockfile, so installs may drift.",
+      "evidence": [
+        {
+          "kind": "manifest",
+          "path": "package.json",
+          "excerpt": "package.json declares dependencies or devDependencies",
+          "id": "EV-005"
+        }
+      ],
+      "id": "FINDING-004",
+      "evidenceIds": [
+        "EV-005"
+      ]
+    },
+    {
+      "kind": "setup-risk",
+      "severity": "medium",
+      "title": "No npm test script is defined",
+      "body": "The package has scripts, but no standard local validation command.",
+      "evidence": [
+        {
+          "kind": "manifest",
+          "path": "package.json",
+          "excerpt": "Available scripts: build",
+          "id": "EV-006"
+        }
+      ],
+      "id": "FINDING-005",
+      "evidenceIds": [
+        "EV-006"
+      ]
+    },
+    {
+      "kind": "validation-surface",
+      "severity": "high",
+      "title": "Source code exists without a visible test surface",
+      "body": "The repository has source files, but no test files were detected.",
+      "evidence": [
+        {
+          "kind": "file",
+          "path": "src/index.ts",
+          "excerpt": "1 source file(s), 0 test files",
+          "id": "EV-007"
+        }
+      ],
+      "id": "FINDING-006",
+      "evidenceIds": [
+        "EV-007"
+      ]
+    },
+    {
+      "kind": "docs-drift",
+      "severity": "medium",
+      "title": "Documented file is missing: docs/dashboard.png",
+      "body": "Documentation references `docs/dashboard.png`, but that file was not found in the repository snapshot.",
+      "evidence": [
+        {
+          "kind": "docs",
+          "path": "README.md",
+          "excerpt": "docs/dashboard.png",
+          "id": "EV-008"
+        }
+      ],
+      "id": "FINDING-007",
+      "evidenceIds": [
+        "EV-008"
+      ]
+    }
+  ],
+  "stallHypotheses": [
+    {
+      "rank": 1,
+      "title": "The project likely stalled around reproducibility and validation",
+      "confidence": "medium",
+      "rationale": "The highest severity findings point to setup instructions or local validation being unreliable.",
+      "supportingFindingKinds": [
+        "setup-risk",
+        "validation-surface"
+      ]
+    },
+    {
+      "rank": 2,
+      "title": "The documentation may have drifted away from the actual repository",
+      "confidence": "medium",
+      "rationale": "The docs reference files or surfaces that are absent from the inspected file tree.",
+      "supportingFindingKinds": [
+        "docs-drift"
+      ]
+    }
+  ],
+  "revivalTasks": [
+    {
+      "phase": "Phase 1",
+      "title": "Make setup reproducible",
+      "rationale": "Fix the setup and install risks before adding product behavior.",
+      "files": [
+        "README.md",
+        "package.json"
+      ],
+      "evidenceIds": [
+        "EV-003",
+        "EV-004",
+        "EV-005",
+        "EV-006"
+      ],
+      "verificationCommand": "npm install && npm run build",
+      "expectedResult": "Dependencies install from a lockfile and the documented build command works.",
+      "priority": 1,
+      "id": "TASK-001"
+    },
+    {
+      "phase": "Phase 2",
+      "title": "Restore a local validation command",
+      "rationale": "A revival needs one command that proves the current baseline.",
+      "files": [
+        "src/index.ts"
+      ],
+      "evidenceIds": [
+        "EV-007"
+      ],
+      "verificationCommand": "npm test",
+      "expectedResult": "A repeatable test command exists and reports a clear result.",
+      "priority": 2,
+      "id": "TASK-002"
+    },
+    {
+      "phase": "Phase 5",
+      "title": "Clean stale public documentation",
+      "rationale": "Portfolio or handoff readers should not hit missing files from the README.",
+      "files": [
+        "README.md"
+      ],
+      "evidenceIds": [
+        "EV-008"
+      ],
+      "verificationCommand": "Search README and docs links for missing local references",
+      "expectedResult": "Documented files either exist or the references are removed.",
+      "priority": 5,
+      "id": "TASK-003"
+    }
+  ],
+  "evidenceIndex": {
+    "EV-001": {
+      "kind": "docs",
+      "path": "README.md",
+      "excerpt": "A small note-taking app for developers who want a local scratchpad beside their editor.",
+      "id": "EV-001"
+    },
+    "EV-002": {
+      "kind": "commit",
+      "excerpt": "git log returned no commits",
+      "id": "EV-002"
+    },
+    "EV-003": {
+      "kind": "docs",
+      "path": "README.md",
+      "excerpt": "npm run dev",
+      "id": "EV-003"
+    },
+    "EV-004": {
+      "kind": "manifest",
+      "path": "package.json",
+      "excerpt": "Available scripts: build",
+      "id": "EV-004"
+    },
+    "EV-005": {
+      "kind": "manifest",
+      "path": "package.json",
+      "excerpt": "package.json declares dependencies or devDependencies",
+      "id": "EV-005"
+    },
+    "EV-006": {
+      "kind": "manifest",
+      "path": "package.json",
+      "excerpt": "Available scripts: build",
+      "id": "EV-006"
+    },
+    "EV-007": {
+      "kind": "file",
+      "path": "src/index.ts",
+      "excerpt": "1 source file(s), 0 test files",
+      "id": "EV-007"
+    },
+    "EV-008": {
+      "kind": "docs",
+      "path": "README.md",
+      "excerpt": "docs/dashboard.png",
+      "id": "EV-008"
+    }
+  }
+}

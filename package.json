@@ -13,6 +13,8 @@
     "test": "npm run test --workspaces",
     "check": "npm run build && npm run test",
     "web:dev": "npm run dev --workspace @project-autopsy/web",
+    "samples:update": "npm run build --workspace @project-autopsy/core && node scripts/sample-reports.mjs --write",
+    "samples:check": "npm run build --workspace @project-autopsy/core && node scripts/sample-reports.mjs --check",
     "inspect:self": "node apps/cli/dist/index.js inspect . --format markdown",
     "inspect:fixture": "node apps/cli/dist/index.js inspect fixtures/stalled-npm-app --format markdown",
     "inspect:fixture:json": "node apps/cli/dist/index.js inspect fixtures/stalled-npm-app --format json"
