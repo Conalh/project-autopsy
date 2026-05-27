@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+apps/*/dist/
+packages/*/dist/
+
+# Coverage and tool caches
+coverage/
+.turbo/
+.next/
+.vite/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Internal planning notes
+PLAN.md
+ROADMAP.md
+docs/superpowers/

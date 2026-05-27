@@ -1,0 +1,21 @@
+{
+  "name": "@project-autopsy/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for Project Autopsy.",
+  "type": "module",
+  "bin": {
+    "project-autopsy": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build --workspace @project-autopsy/core && vitest run"
+  },
+  "dependencies": {
+    "@project-autopsy/core": "file:../../packages/core"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  }
+}

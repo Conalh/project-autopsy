@@ -1,0 +1,28 @@
+{
+  "name": "project-autopsy",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Evidence-backed autopsy reports and revival plans for stalled software repositories.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "check": "npm run build && npm run test",
+    "inspect:self": "node apps/cli/dist/index.js inspect . --format markdown"
+  },
+  "keywords": [
+    "repository-analysis",
+    "developer-tools",
+    "software-archaeology",
+    "cli"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  }
+}
