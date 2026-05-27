@@ -1,7 +1,9 @@
-import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
 import { enqueueWebAnalysisJob } from "../../../lib/analysis-queue";
-import { createWebRunStore } from "../../../lib/run-store";
 import { resolveGitHubToken } from "../../../lib/github-auth";
+import {
+  inspectRepository,
+  toRepositoryInspectionJobPayload
+} from "../../../lib/repository-inspection";
 
 interface InspectRequestBody {
   source?: unknown;
@@ -31,7 +33,16 @@ export async function POST(request: Request): Promise<Response> {
     };
 
     if (body.queue === true) {
-      const job = await enqueueWebAnalysisJob(() => inspectRepository(body.source as string, body.save === true, options));
+      const payload = toRepositoryInspectionJobPayload({
+        source: body.source,
+        save: body.save === true,
+        branch: options.branch,
+        checkDependencyRegistry: options.checkDependencyRegistry
+      });
+      const job = await enqueueWebAnalysisJob(() => inspectRepository(body.source as string, body.save === true, options), {
+        payload,
+        runInline: readEnv("PROJECT_AUTOPSY_ANALYSIS_QUEUE_MODE") !== "external"
+      });
       return jsonResponse({ job }, 202);
     }
 
@@ -41,28 +52,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-async function inspectRepository(
-  source: string,
-  save: boolean,
-  options: {
-    branch?: string;
-    checkDependencyRegistry: boolean;
-    token?: string;
-  }
-) {
-  if (save) {
-    const saved = await analyzeAndSaveRepository(source, {
-      ...options,
-      store: await createWebRunStore()
-    });
-    const { markdown, json, ...run } = saved;
-    return { run, report: saved.report };
-  }
-
-  const report = await analyzeRepository(source, options);
-  return { report };
-}
-
 function jsonResponse(body: unknown, status = 200): Response {
   return Response.json(body, { status });
+}
+
+function readEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value && value.length > 0 ? value : undefined;
 }

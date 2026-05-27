@@ -192,6 +192,39 @@ describe("analysis job queue", () => {
     await expect(store.getJob("job_recent")).resolves.toMatchObject({ id: "job_recent" });
     await expect(store.getJob("job_running")).resolves.toMatchObject({ id: "job_running" });
   });
+
+  test("persists and claims queued job payloads for external workers", async () => {
+    const client = new FakePostgresClient();
+    const store = createPostgresAnalysisJobStore(client);
+
+    await store.createJob({
+      id: "job_payload",
+      status: "queued",
+      createdAt: "2026-05-27T00:00:00.000Z",
+      updatedAt: "2026-05-27T00:00:00.000Z",
+      maxAttempts: 2,
+      payload: {
+        source: "https://github.com/acme/project",
+        save: true,
+        checkDependencyRegistry: true
+      }
+    });
+
+    const claimed = await store.claimNextQueuedJob<{ source: string; save: boolean; checkDependencyRegistry: boolean }>();
+
+    expect(claimed).toMatchObject({
+      id: "job_payload",
+      status: "running",
+      attempts: 1,
+      maxAttempts: 2,
+      payload: {
+        source: "https://github.com/acme/project",
+        save: true,
+        checkDependencyRegistry: true
+      }
+    });
+    await expect(store.claimNextQueuedJob()).resolves.toBeUndefined();
+  });
 });
 
 interface AnalysisJobRow {
@@ -200,6 +233,7 @@ interface AnalysisJobRow {
   created_at: string;
   updated_at: string;
   result_json: string | null;
+  payload_json: string | null;
   error: string | null;
   attempts: number;
   max_attempts: number;
@@ -222,12 +256,31 @@ class FakePostgresClient implements PostgresQueryClient {
         created_at: String(values[2]),
         updated_at: String(values[3]),
         result_json: values[4] === null || values[4] === undefined ? null : String(values[4]),
-        error: values[5] === null || values[5] === undefined ? null : String(values[5]),
-        attempts: Number(values[6] ?? 0),
-        max_attempts: Number(values[7] ?? 1)
+        payload_json: values[5] === null || values[5] === undefined ? null : String(values[5]),
+        error: values[6] === null || values[6] === undefined ? null : String(values[6]),
+        attempts: Number(values[7] ?? 0),
+        max_attempts: Number(values[8] ?? 1)
       };
       this.rows.set(row.id, row);
       return { rows: [] };
+    }
+
+    if (text.includes("UPDATE analysis_jobs") && text.includes("status = 'running'")) {
+      const queued = [...this.rows.values()]
+        .filter((row) => row.status === "queued")
+        .sort((left, right) => left.created_at.localeCompare(right.created_at))[0];
+      if (!queued) {
+        return { rows: [] };
+      }
+      const row = {
+        ...queued,
+        status: "running",
+        updated_at: String(values[0]),
+        attempts: queued.attempts + 1,
+        error: null
+      };
+      this.rows.set(row.id, row);
+      return { rows: [row as Row] };
     }
 
     if (text.includes("UPDATE analysis_jobs")) {
@@ -240,6 +293,7 @@ class FakePostgresClient implements PostgresQueryClient {
         status: String(values[1]),
         updated_at: String(values[2]),
         result_json: values[3] === undefined ? existing.result_json : values[3] === null ? null : String(values[3]),
+        payload_json: existing.payload_json,
         error: values[4] === undefined ? existing.error : values[4] === null ? null : String(values[4]),
         attempts: values[5] === undefined ? existing.attempts : Number(values[5])
       };

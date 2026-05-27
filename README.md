@@ -122,7 +122,7 @@ node apps\cli\dist\index.js show <run_id> --format markdown
 Saved runs live in `.project-autopsy/runs.sqlite` by default and are ignored by git.
 
 Hosted web/API runs can use Postgres by setting `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL`. When neither is present, the web surface falls back to SQLite. `PROJECT_AUTOPSY_RUN_DB_PATH` can override the local SQLite path.
-Queued hosted jobs persist status, result, error, and retry attempts in Postgres. Set `PROJECT_AUTOPSY_ANALYSIS_JOB_MAX_ATTEMPTS` to retry transient queued-analysis failures before a job is marked failed.
+Queued hosted jobs persist payload, status, result, error, and retry attempts in Postgres. Set `PROJECT_AUTOPSY_ANALYSIS_JOB_MAX_ATTEMPTS` to retry transient queued-analysis failures before a job is marked failed. Set `PROJECT_AUTOPSY_ANALYSIS_QUEUE_MODE=external` when a separate worker process will claim and process queued jobs through `processNextAnalysisJob`.
 
 ## Web And API
 
@@ -249,14 +249,14 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Reports export as Markdown and JSON.
 - Saved run history is backed by local SQLite.
 - Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
-- API inspections can run through a queue and be polled by job id; hosted mode persists job state, result, errors, and retry attempts in Postgres.
+- API inspections can run through a queue and be polled by job id; hosted mode persists job payload, state, result, errors, and retry attempts in Postgres.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
 
-- Hosted API mode is still local-first by default; production auth and a separate queue worker process are future work.
+- Hosted API mode is still local-first by default; production auth and worker process supervision are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
@@ -267,5 +267,5 @@ Limits worth knowing:
 1. Report polish for timeline and dependency-focused views.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
-4. External queue worker process for hosted analysis.
-5. Web UI polish for saved runs, setup state, and report navigation.
+4. Web UI polish for saved runs, setup state, and report navigation.
+5. Worker process supervision, metrics, and retention scheduling for hosted analysis.

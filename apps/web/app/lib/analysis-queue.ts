@@ -10,6 +10,7 @@ export interface AnalysisJob<Result = unknown> {
   updatedAt: string;
   attempts?: number;
   maxAttempts?: number;
+  payload?: unknown;
   result?: Result;
   error?: string;
 }
@@ -26,6 +27,7 @@ export interface PostgresQueryClient {
 export interface AnalysisJobStore {
   createJob<Result = unknown>(job: AnalysisJob<Result>): Promise<AnalysisJob<Result>>;
   getJob<Result = unknown>(id: string): Promise<AnalysisJob<Result> | undefined>;
+  claimNextQueuedJob<Payload = unknown>(): Promise<AnalysisJob<unknown> & { payload?: Payload } | undefined>;
   updateJob<Result = unknown>(
     id: string,
     patch: Pick<AnalysisJob<Result>, "status"> & Partial<Pick<AnalysisJob<Result>, "attempts" | "result" | "error">>
@@ -33,10 +35,12 @@ export interface AnalysisJobStore {
   cleanupTerminalJobs(options: { olderThan: string }): Promise<number>;
 }
 
-interface WebAnalysisJobQueueOptions {
+export interface WebAnalysisJobQueueOptions {
   env?: Record<string, string | undefined>;
   postgresClient?: PostgresQueryClient;
   migratePostgres?: boolean;
+  payload?: unknown;
+  runInline?: boolean;
 }
 
 interface AnalysisJobRow {
@@ -45,6 +49,7 @@ interface AnalysisJobRow {
   created_at: string;
   updated_at: string;
   result_json: string | Record<string, unknown> | null;
+  payload_json: string | Record<string, unknown> | null;
   error: string | null;
   attempts: number | null;
   max_attempts: number | null;
@@ -57,10 +62,14 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
   result_json JSONB,
+  payload_json JSONB,
   error TEXT,
   attempts INTEGER NOT NULL DEFAULT 0,
   max_attempts INTEGER NOT NULL DEFAULT 1
 );
+
+ALTER TABLE analysis_jobs
+  ADD COLUMN IF NOT EXISTS payload_json JSONB;
 
 ALTER TABLE analysis_jobs
   ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
@@ -135,16 +144,18 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
           created_at,
           updated_at,
           result_json,
+          payload_json,
           error,
           attempts,
           max_attempts
-        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)`,
+        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9)`,
         [
           job.id,
           job.status,
           job.createdAt,
           job.updatedAt,
           job.result === undefined ? null : JSON.stringify(job.result),
+          job.payload === undefined ? null : JSON.stringify(job.payload),
           job.error ?? null,
           job.attempts ?? 0,
           normalizeMaxAttempts(job.maxAttempts)
@@ -156,13 +167,37 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
 
     async getJob(id) {
       const result = await client.query<AnalysisJobRow>(
-        `SELECT id, status, created_at, updated_at, result_json, error, attempts, max_attempts
+        `SELECT id, status, created_at, updated_at, result_json, payload_json, error, attempts, max_attempts
         FROM analysis_jobs
         WHERE id = $1`,
         [id]
       );
       const row = result.rows[0];
       return row ? toAnalysisJob(row) : undefined;
+    },
+
+    async claimNextQueuedJob<Payload = unknown>() {
+      const updatedAt = new Date().toISOString();
+      const result = await client.query<AnalysisJobRow>(
+        `UPDATE analysis_jobs
+        SET
+          status = 'running',
+          updated_at = $1,
+          attempts = attempts + 1,
+          error = NULL
+        WHERE id = (
+          SELECT id
+          FROM analysis_jobs
+          WHERE status = 'queued'
+          ORDER BY created_at ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+        )
+        RETURNING id, status, created_at, updated_at, result_json, payload_json, error, attempts, max_attempts`,
+        [updatedAt]
+      );
+      const row = result.rows[0];
+      return row ? (toAnalysisJob(row) as AnalysisJob<unknown> & { payload?: Payload }) : undefined;
     },
 
     async updateJob(id, patch) {
@@ -176,7 +211,7 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
           error = $5,
           attempts = $6
         WHERE id = $1
-        RETURNING id, status, created_at, updated_at, result_json, error, attempts, max_attempts`,
+        RETURNING id, status, created_at, updated_at, result_json, payload_json, error, attempts, max_attempts`,
         [
           id,
           patch.status,
@@ -223,11 +258,14 @@ export async function enqueueWebAnalysisJob<Result>(
     createdAt: now,
     updatedAt: now,
     attempts: 0,
-    maxAttempts: readMaxAttempts(options.env ?? process.env)
+    maxAttempts: readMaxAttempts(options.env ?? process.env),
+    ...(options.payload === undefined ? {} : { payload: options.payload })
   };
   await store.createJob(job);
 
-  void runStoredJob(job.id, work, store);
+  if (options.runInline !== false) {
+    void runStoredJob(job.id, work, store);
+  }
 
   return job;
 }
@@ -293,7 +331,7 @@ async function runStoredJob<Result>(
   }
 }
 
-async function createWebAnalysisJobStore(
+export async function createWebAnalysisJobStore(
   options: WebAnalysisJobQueueOptions
 ): Promise<AnalysisJobStore | undefined> {
   const env = options.env ?? process.env;
@@ -320,6 +358,7 @@ function toAnalysisJob<Result = unknown>(row: AnalysisJobRow): AnalysisJob<Resul
     updatedAt: new Date(row.updated_at).toISOString(),
     attempts: row.attempts ?? 0,
     maxAttempts: normalizeMaxAttempts(row.max_attempts ?? undefined),
+    ...(row.payload_json === null ? {} : { payload: readResultJson(row.payload_json) }),
     ...(row.result_json === null ? {} : { result: readResultJson<Result>(row.result_json) }),
     ...(row.error ? { error: row.error } : {})
   };
