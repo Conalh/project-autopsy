@@ -29,6 +29,7 @@ The current version is a working CLI/core/web slice. It is intentionally small, 
 - CLI command for local and public GitHub inspection
 - Web report surface for public GitHub repos and the fixture demo
 - Token-backed private GitHub repository inspection
+- Hosted-style JSON API routes over the core report contract
 - SQLite-backed saved analysis runs
 - Recent-run loading in the CLI and web UI
 
@@ -87,6 +88,12 @@ Run the web app:
 
 ```powershell
 npm run web:dev
+```
+
+Inspect through the local API:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/repositories/inspect -ContentType "application/json" -Body '{"source":"https://github.com/owner/repo","save":true}'
 ```
 
 ## Example Output
@@ -187,6 +194,12 @@ Goal 9 private GitHub token support is in place:
 - CLI and web inspections read `PROJECT_AUTOPSY_GITHUB_TOKEN`
 - Private or missing GitHub repositories now return an authentication-oriented error message
 
+Goal 10 hosted API mode is in place:
+
+- `POST /api/repositories/inspect` returns `{ report }` or `{ run, report }`
+- `GET /api/runs/{id}` loads saved run JSON
+- `GET /api/runs/{id}/export.md` returns saved Markdown export
+
 ## Commands
 
 ```powershell
@@ -208,14 +221,15 @@ node apps\cli\dist\index.js inspect https://github.com/owner/private-repo --gith
 
 - Registry freshness is currently npm-only and opt-in.
 - Non-npm dependency versions are parsed and reported as declared, but not checked against registries yet.
-- Hosted mode and web UI polish are future work.
+- Hosted API mode is local-first and file-backed; production auth, queues, and Postgres are future work.
+- Web UI polish is future work.
 - The analyzer never runs arbitrary commands from inspected repositories.
 - Full GitHub App installation is not implemented yet.
 
 ## Next Milestones
 
-1. Add a hosted API mode behind the same core report contract.
-2. Add report polish for timeline and dependency-focused views.
-3. Extend registry-backed drift checks beyond npm.
-4. Add coverage and badge polish for the public GitHub surface.
-5. Add GitHub App installation for hosted/private repo access.
+1. Add report polish for timeline and dependency-focused views.
+2. Extend registry-backed drift checks beyond npm.
+3. Add coverage and badge polish for the public GitHub surface.
+4. Add GitHub App installation for hosted/private repo access.
+5. Add hosted queues and Postgres-backed run storage.

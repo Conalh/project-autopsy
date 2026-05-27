@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { createSqliteRunStore } from "@project-autopsy/core";
 
 export function createWebRunStore() {
+  if (process.env.PROJECT_AUTOPSY_RUN_DB_PATH) {
+    return createSqliteRunStore(process.env.PROJECT_AUTOPSY_RUN_DB_PATH);
+  }
+
   return createSqliteRunStore(path.join(findWorkspaceRoot(), ".project-autopsy", "runs.sqlite"));
 }
 
