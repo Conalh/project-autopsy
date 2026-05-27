@@ -36,6 +36,12 @@ You can inspect another local repository by replacing `.` with a path:
 node apps\cli\dist\index.js inspect C:\path\to\old-repo --format markdown
 ```
 
+For a deterministic demo that does not depend on the current repo state:
+
+```powershell
+npm run inspect:fixture
+```
+
 ## Example Output
 
 ```markdown
@@ -65,12 +71,22 @@ packages/
 
 The core package owns the product behavior. The CLI only parses arguments, calls the core, and prints the report. That keeps the analysis engine reusable for a future web app or API.
 
+## Goal 0 Status
+
+The product skeleton is in place:
+
+- `apps/cli`: CLI entry point and CLI behavior tests
+- `packages/core`: shared TypeScript contracts, ingestion, detectors, report assembly, and Markdown rendering
+- `fixtures`: durable local test repositories for npm, Python, Rust, Go, and mixed-stack projects
+- `npm run inspect:fixture`: deterministic demo report from `fixtures/stalled-npm-app`
+
 ## Commands
 
 ```powershell
 npm test       # Run core and CLI tests
 npm run build  # Compile all workspaces
 npm run check  # Build, then test
+npm run inspect:fixture  # Print a deterministic fixture autopsy report
 ```
 
 ## Current Limits
@@ -86,5 +102,5 @@ npm run check  # Build, then test
 1. Add public GitHub repository ingestion.
 2. Expand manifest support beyond npm.
 3. Add dependency drift rules that can query registries explicitly.
-4. Save sample reports as fixtures.
+4. Save rendered sample reports for regression review.
 5. Build the web report surface on top of the core output.

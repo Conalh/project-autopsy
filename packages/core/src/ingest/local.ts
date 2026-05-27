@@ -54,14 +54,15 @@ export async function inspectLocalRepository(rootPath: string): Promise<RepoSnap
   const files = await walkFiles(resolvedRoot);
   const manifests = await readManifests(resolvedRoot, files);
   const docs = await readDocs(resolvedRoot, files);
-  const commits = await readCommits(resolvedRoot);
+  const isGitRoot = await isGitRepositoryRoot(resolvedRoot);
+  const commits = isGitRoot ? await readCommits(resolvedRoot) : [];
   const summary = summarizeProject(docs, manifests);
 
   return {
     sourceType: "local_path",
     rootPath: resolvedRoot,
-    defaultBranch: await readGitValue(resolvedRoot, ["branch", "--show-current"]),
-    headSha: await readGitValue(resolvedRoot, ["rev-parse", "HEAD"]),
+    defaultBranch: isGitRoot ? await readGitValue(resolvedRoot, ["branch", "--show-current"]) : undefined,
+    headSha: isGitRoot ? await readGitValue(resolvedRoot, ["rev-parse", "HEAD"]) : undefined,
     fileCount: files.length,
     totalSizeBytes: files.reduce((total, file) => total + file.sizeBytes, 0),
     languages: summarizeLanguages(files),
@@ -71,6 +72,15 @@ export async function inspectLocalRepository(rootPath: string): Promise<RepoSnap
     commits,
     summary
   };
+}
+
+async function isGitRepositoryRoot(rootPath: string): Promise<boolean> {
+  const topLevel = await readGitValue(rootPath, ["rev-parse", "--show-toplevel"]);
+  if (!topLevel) {
+    return false;
+  }
+
+  return normalizePath(topLevel) === normalizePath(rootPath);
 }
 
 async function walkFiles(rootPath: string): Promise<FileRecord[]> {
@@ -322,4 +332,8 @@ function summarizeLanguages(files: FileRecord[]): Record<string, number> {
 
 function toPosix(filePath: string): string {
   return filePath.split(path.sep).join("/");
+}
+
+function normalizePath(filePath: string): string {
+  return path.resolve(filePath).replaceAll("\\", "/").toLowerCase();
 }
