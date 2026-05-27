@@ -203,7 +203,7 @@ apps/
   cli/              Node CLI wrapper around the core
   web/              Next.js UI and API routes
 packages/
-  core/             Ingestion, detectors, report assembly, Markdown/JSON, SQLite store
+  core/             Ingestion, detectors, report assembly, Markdown/JSON, SQLite/Postgres stores
 fixtures/           Stable local repositories for deterministic tests and samples
 docs/sample-reports/  Committed regression artifacts
 ```
@@ -235,13 +235,14 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Private GitHub repos work with a supplied token.
 - Reports export as Markdown and JSON.
 - Saved run history is backed by local SQLite.
+- Hosted storage integrations can use the async Postgres run-store adapter.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
 
-- Hosted API mode is local-first and file-backed; production auth, queues, and Postgres are future work.
+- Hosted API mode is still local-first by default; production auth, queues, and automatic Postgres wiring are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App auth is env-backed; the browser installation flow is not implemented yet.
@@ -253,4 +254,4 @@ Limits worth knowing:
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
 4. Browser GitHub App installation flow for hosted/private repo access.
-5. Hosted queues and Postgres-backed run storage.
+5. Hosted queues and automatic Postgres-backed run storage selection.

@@ -1,12 +1,12 @@
 import type { GitHubInspectionOptions } from "../ingest/github.js";
 import { createSqliteRunStore } from "../store/sqlite-run-store.js";
-import type { AnalysisRunStore, SavedAnalysisRun } from "../types.js";
+import type { AnalysisRunStore, AsyncAnalysisRunStore, SavedAnalysisRun } from "../types.js";
 import { analyzeRepository } from "./autopsy-report.js";
 import { renderJsonReport } from "./json.js";
 import { renderMarkdownReport } from "./markdown.js";
 
 export interface AnalyzeAndSaveOptions extends GitHubInspectionOptions {
-  store?: AnalysisRunStore;
+  store?: AnalysisRunStore | AsyncAnalysisRunStore;
 }
 
 export async function analyzeAndSaveRepository(
@@ -16,7 +16,7 @@ export async function analyzeAndSaveRepository(
   const store = options.store ?? createSqliteRunStore();
   const report = await analyzeRepository(source, options);
 
-  return store.saveRun({
+  return await store.saveRun({
     source,
     report,
     markdown: renderMarkdownReport(report),

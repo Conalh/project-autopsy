@@ -170,13 +170,21 @@ export interface SavedAnalysisRun extends SavedAnalysisRunSummary {
   json: string;
 }
 
+export interface SaveAnalysisRunInput {
+  source: string;
+  report: AutopsyReport;
+  markdown: string;
+  json: string;
+}
+
 export interface AnalysisRunStore {
-  saveRun(input: {
-    source: string;
-    report: AutopsyReport;
-    markdown: string;
-    json: string;
-  }): SavedAnalysisRun;
+  saveRun(input: SaveAnalysisRunInput): SavedAnalysisRun;
   listRuns(limit?: number): SavedAnalysisRunSummary[];
   getRun(id: string): SavedAnalysisRun | undefined;
+}
+
+export interface AsyncAnalysisRunStore {
+  saveRun(input: SaveAnalysisRunInput): Promise<SavedAnalysisRun>;
+  listRuns(limit?: number): Promise<SavedAnalysisRunSummary[]>;
+  getRun(id: string): Promise<SavedAnalysisRun | undefined>;
 }
