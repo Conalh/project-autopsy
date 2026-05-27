@@ -38,6 +38,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
       const saved = await analyzeAndSaveRepository(source, {
         branch: params.branch,
         checkDependencyRegistry: params.checkRegistry === "1",
+        token: process.env.PROJECT_AUTOPSY_GITHUB_TOKEN,
         store: createWebRunStore()
       });
       return <ReportView report={saved.report} savedRunId={saved.id} />;
@@ -45,7 +46,8 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
 
     const report = await analyzeRepository(source, {
       branch: params.branch,
-      checkDependencyRegistry: params.checkRegistry === "1"
+      checkDependencyRegistry: params.checkRegistry === "1",
+      token: process.env.PROJECT_AUTOPSY_GITHUB_TOKEN
     });
     return <ReportView report={report} />;
   } catch (error) {

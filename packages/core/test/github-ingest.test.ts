@@ -177,4 +177,14 @@ describe("GitHub repository inspection", () => {
     expect(markdown).toContain("Latest visible momentum: pause after scaffold");
     expect(markdown).toContain("Documented file is missing: docs/dashboard.png");
   });
+
+  test("explains when a GitHub repository may require authentication", async () => {
+    const fetchImpl = (async () => jsonResponse({ message: "Not Found" }, 404)) as typeof fetch;
+
+    await expect(
+      inspectGitHubRepository({ url: "https://github.com/acme/private-notes" }, { fetch: fetchImpl })
+    ).rejects.toThrow(
+      "GitHub repository not found or private: https://github.com/acme/private-notes. Provide a GitHub token to inspect private repositories."
+    );
+  });
 });

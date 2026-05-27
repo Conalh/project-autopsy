@@ -120,7 +120,9 @@ export async function inspectGitHubRepository(
 ): Promise<RepoSnapshot> {
   const parsed = parseGitHubUrl(input.url);
   const request = createGitHubRequester(options);
-  const repo = await request<GitHubRepoResponse>(`/repos/${parsed.owner}/${parsed.repo}`);
+  const repo = await request<GitHubRepoResponse>(`/repos/${parsed.owner}/${parsed.repo}`, {
+    repoUrl: parsed.url
+  });
   const branch = input.branch ?? parsed.branch ?? repo.default_branch;
   const tree = await request<GitHubTreeResponse>(
     `/repos/${parsed.owner}/${parsed.repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`
@@ -238,7 +240,10 @@ async function readGitHubFile(
 function createGitHubRequester(options: GitHubInspectionOptions) {
   const fetchImpl = options.fetch ?? fetch;
 
-  return async function request<T>(pathName: string): Promise<T> {
+  return async function request<T>(
+    pathName: string,
+    context: { repoUrl?: string } = {}
+  ): Promise<T> {
     const response = await fetchImpl(`https://api.github.com${pathName}`, {
       headers: {
         accept: "application/vnd.github+json",
@@ -248,6 +253,11 @@ function createGitHubRequester(options: GitHubInspectionOptions) {
     });
 
     if (!response.ok) {
+      if (response.status === 404 && context.repoUrl) {
+        throw new Error(
+          `GitHub repository not found or private: ${context.repoUrl}. Provide a GitHub token to inspect private repositories.`
+        );
+      }
       throw new Error(`GitHub API request failed (${response.status}) for ${pathName}`);
     }
 

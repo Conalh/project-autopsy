@@ -59,6 +59,26 @@ describe("project-autopsy CLI", () => {
     expect(result.stderr).toBe("");
   });
 
+  test("passes GitHub token flags to private repository inspection", async () => {
+    const result = await runCli(
+      [
+        "inspect",
+        "https://github.com/acme/private-notes",
+        "--format",
+        "markdown",
+        "--github-token",
+        "secret-token"
+      ],
+      {
+        fetch: createPrivateGitHubFetch("secret-token")
+      }
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("# Project Autopsy: Private CLI Fixture");
+    expect(result.stderr).toBe("");
+  });
+
   test("prints json report output when requested", async () => {
     const repoPath = await createCliFixture();
 
@@ -147,6 +167,67 @@ function createGitHubFetch(): typeof fetch {
 
   return (async (input: string | URL | Request) => {
     const url = input.toString();
+    if (!responses.has(url)) {
+      return new Response(JSON.stringify({ message: `Unhandled URL: ${url}` }), { status: 404 });
+    }
+
+    return new Response(JSON.stringify(responses.get(url)), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  }) as typeof fetch;
+}
+
+function createPrivateGitHubFetch(expectedToken: string): typeof fetch {
+  const responses = new Map<string, unknown>([
+    [
+      "https://api.github.com/repos/acme/private-notes",
+      {
+        name: "private-notes",
+        full_name: "acme/private-notes",
+        html_url: "https://github.com/acme/private-notes",
+        default_branch: "main"
+      }
+    ],
+    [
+      "https://api.github.com/repos/acme/private-notes/git/trees/main?recursive=1",
+      {
+        sha: "tree-sha",
+        tree: [
+          { path: "README.md", type: "blob", size: 40 },
+          { path: "package.json", type: "blob", size: 64 },
+          { path: "src/index.ts", type: "blob", size: 24 }
+        ]
+      }
+    ],
+    [
+      "https://api.github.com/repos/acme/private-notes/contents/README.md?ref=main",
+      {
+        encoding: "base64",
+        content: Buffer.from("# Private CLI Fixture\n\nA private fixture repo.\n").toString("base64")
+      }
+    ],
+    [
+      "https://api.github.com/repos/acme/private-notes/contents/package.json?ref=main",
+      {
+        encoding: "base64",
+        content: Buffer.from(JSON.stringify({ name: "private-notes", scripts: { test: "vitest run" } })).toString(
+          "base64"
+        )
+      }
+    ],
+    [
+      "https://api.github.com/repos/acme/private-notes/commits?sha=main&per_page=20",
+      []
+    ]
+  ]);
+
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = input.toString();
+    const authorization = new Headers(init?.headers).get("authorization");
+    if (authorization !== `Bearer ${expectedToken}`) {
+      return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
+    }
     if (!responses.has(url)) {
       return new Response(JSON.stringify({ message: `Unhandled URL: ${url}` }), { status: 404 });
     }

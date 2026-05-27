@@ -28,6 +28,7 @@ The current version is a working CLI/core/web slice. It is intentionally small, 
 - Opt-in npm registry freshness checks
 - CLI command for local and public GitHub inspection
 - Web report surface for public GitHub repos and the fixture demo
+- Token-backed private GitHub repository inspection
 - SQLite-backed saved analysis runs
 - Recent-run loading in the CLI and web UI
 
@@ -51,6 +52,14 @@ Or inspect a public GitHub repository:
 ```powershell
 node apps\cli\dist\index.js inspect https://github.com/octocat/Hello-World --format markdown
 node apps\cli\dist\index.js inspect https://github.com/owner/repo --branch main --format markdown
+```
+
+Inspect a private GitHub repository with a token:
+
+```powershell
+node apps\cli\dist\index.js inspect https://github.com/owner/private-repo --github-token <token>
+$env:PROJECT_AUTOPSY_GITHUB_TOKEN="<token>"
+node apps\cli\dist\index.js inspect https://github.com/owner/private-repo
 ```
 
 Opt into npm registry-backed dependency freshness checks:
@@ -172,6 +181,12 @@ Goal 8 sample reports are in place:
 - `npm run samples:update` refreshes sample reports from stable fixtures
 - `npm run samples:check` fails when committed samples drift from current report output
 
+Goal 9 private GitHub token support is in place:
+
+- CLI inspections accept `--github-token <token>`
+- CLI and web inspections read `PROJECT_AUTOPSY_GITHUB_TOKEN`
+- Private or missing GitHub repositories now return an authentication-oriented error message
+
 ## Commands
 
 ```powershell
@@ -186,6 +201,7 @@ npm run inspect:fixture:json  # Print the same report as JSON
 node apps\cli\dist\index.js inspect . --save  # Save an analysis run
 node apps\cli\dist\index.js runs  # List saved analysis runs
 node apps\cli\dist\index.js inspect . --check-registry  # Check npm registry freshness
+node apps\cli\dist\index.js inspect https://github.com/owner/private-repo --github-token <token>
 ```
 
 ## Current Limits
@@ -194,12 +210,12 @@ node apps\cli\dist\index.js inspect . --check-registry  # Check npm registry fre
 - Non-npm dependency versions are parsed and reported as declared, but not checked against registries yet.
 - Hosted mode and web UI polish are future work.
 - The analyzer never runs arbitrary commands from inspected repositories.
-- Private GitHub repositories and GitHub App installation are not implemented yet.
+- Full GitHub App installation is not implemented yet.
 
 ## Next Milestones
 
-1. Add private GitHub or GitHub App ingestion.
-2. Add a hosted API mode behind the same core report contract.
-3. Add report polish for timeline and dependency-focused views.
-4. Extend registry-backed drift checks beyond npm.
-5. Add coverage and badge polish for the public GitHub surface.
+1. Add a hosted API mode behind the same core report contract.
+2. Add report polish for timeline and dependency-focused views.
+3. Extend registry-backed drift checks beyond npm.
+4. Add coverage and badge polish for the public GitHub surface.
+5. Add GitHub App installation for hosted/private repo access.
