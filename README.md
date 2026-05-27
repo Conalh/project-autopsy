@@ -1,4 +1,4 @@
-# Project Autopsy [![typescript](https://img.shields.io/badge/TypeScript-5.9-blue)](tsconfig.base.json) [![next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](apps/web/package.json) [![node](https://img.shields.io/badge/Node.js-24-green?logo=node.js)](package.json) [![vitest](https://img.shields.io/badge/Vitest-tested-6E9F18?logo=vitest)](package.json) [![sqlite](https://img.shields.io/badge/SQLite-run%20history-003B57?logo=sqlite)](packages/core/src/store/sqlite-run-store.ts)
+# Project Autopsy [![ci](https://github.com/Conalh/project-autopsy/actions/workflows/ci.yml/badge.svg)](https://github.com/Conalh/project-autopsy/actions/workflows/ci.yml) [![typescript](https://img.shields.io/badge/TypeScript-5.9-blue)](tsconfig.base.json) [![next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](apps/web/package.json) [![node](https://img.shields.io/badge/Node.js-24-green?logo=node.js)](package.json) [![vitest](https://img.shields.io/badge/Vitest-tested-6E9F18?logo=vitest)](package.json) [![sqlite](https://img.shields.io/badge/SQLite-run%20history-003B57?logo=sqlite)](packages/core/src/store/sqlite-run-store.ts)
 
 **An evidence-backed autopsy report for stale software repositories.** Project Autopsy inspects a local path, public GitHub URL, or token-backed private GitHub repo, then turns the file tree, manifests, docs, commit history, and dependency signals into a structured diagnosis: score, verdict, findings, stall hypotheses, revival tasks, and source evidence.
 
@@ -193,6 +193,8 @@ npm test
 npm run build
 npm run samples:check
 ```
+
+The GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the same build, test, and sample-report drift checks on pushes, pull requests, and manual dispatches.
 
 Current coverage focus:
 
