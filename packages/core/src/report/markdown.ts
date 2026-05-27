@@ -18,6 +18,7 @@ export function renderMarkdownReport(report: AutopsyReport): string {
     `- Latest commit: ${report.snapshot.commits[0]?.message ?? "No commit history found"}`,
     `- Technologies: ${report.snapshot.summary.technologies.join(", ") || "Unknown"}`,
     "",
+    ...formatDependencySnapshot(report),
     "## Stall Hypotheses",
     "",
     ...report.stallHypotheses.flatMap(formatHypothesis),
@@ -33,6 +34,37 @@ export function renderMarkdownReport(report: AutopsyReport): string {
   ];
 
   return `${lines.join("\n").trim()}\n`;
+}
+
+function formatDependencySnapshot(report: AutopsyReport): string[] {
+  if (report.snapshot.manifests.length === 0) {
+    return [];
+  }
+
+  return [
+    "## Dependency Snapshot",
+    "",
+    ...report.snapshot.manifests.flatMap((manifest) => [
+      `- **${manifest.path}** (${manifest.manager})`,
+      `  Dependencies: ${formatNameValueMap(manifest.dependencies)}`,
+      ...(Object.keys(manifest.devDependencies).length > 0
+        ? [`  Dev dependencies: ${formatNameValueMap(manifest.devDependencies)}`]
+        : []),
+      ...(Object.keys(manifest.scripts).length > 0
+        ? [`  Scripts: ${formatNameValueMap(manifest.scripts)}`]
+        : []),
+      ""
+    ])
+  ];
+}
+
+function formatNameValueMap(values: Record<string, string>): string {
+  const entries = Object.entries(values);
+  if (entries.length === 0) {
+    return "none";
+  }
+
+  return entries.map(([name, value]) => `${name} ${value}`.trim()).join(", ");
 }
 
 function formatHypothesis(hypothesis: StallHypothesis): string[] {

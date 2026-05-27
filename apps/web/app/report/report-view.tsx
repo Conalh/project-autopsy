@@ -3,6 +3,7 @@ import {
   renderMarkdownReport,
   type AutopsyReport,
   type Finding,
+  type ManifestRecord,
   type RevivalTask,
   type Severity
 } from "@project-autopsy/core";
@@ -93,6 +94,19 @@ export function ReportView({
           </section>
 
           <section className="panel">
+            <h2>Dependencies</h2>
+            <div className="manifest-list">
+              {report.snapshot.manifests.length > 0 ? (
+                report.snapshot.manifests.map((manifest) => (
+                  <ManifestCard key={manifest.path} manifest={manifest} />
+                ))
+              ) : (
+                <p className="muted">No supported manifests were detected.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
             <h2>Exports</h2>
             <details>
               <summary>Markdown</summary>
@@ -120,6 +134,44 @@ export function ReportView({
       </div>
     </main>
   );
+}
+
+function ManifestCard({ manifest }: { manifest: ManifestRecord }) {
+  return (
+    <article className="manifest-card">
+      <div className="card-title-row">
+        <h3>{manifest.path}</h3>
+        <span className="manifest-manager">{manifest.manager}</span>
+      </div>
+      <dl className="fact-list">
+        <div>
+          <dt>Dependencies</dt>
+          <dd>{formatNameValueMap(manifest.dependencies)}</dd>
+        </div>
+        {Object.keys(manifest.devDependencies).length > 0 ? (
+          <div>
+            <dt>Dev dependencies</dt>
+            <dd>{formatNameValueMap(manifest.devDependencies)}</dd>
+          </div>
+        ) : null}
+        {Object.keys(manifest.scripts).length > 0 ? (
+          <div>
+            <dt>Scripts</dt>
+            <dd>{formatNameValueMap(manifest.scripts)}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </article>
+  );
+}
+
+function formatNameValueMap(values: Record<string, string>) {
+  const entries = Object.entries(values);
+  if (entries.length === 0) {
+    return "none";
+  }
+
+  return entries.map(([name, value]) => `${name} ${value}`.trim()).join(", ");
 }
 
 function FindingCard({ finding }: { finding: Finding }) {

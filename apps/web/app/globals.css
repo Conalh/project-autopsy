@@ -296,6 +296,7 @@ button {
 
 .finding-list,
 .task-list,
+.manifest-list,
 .evidence-list {
   display: grid;
   gap: 10px;
@@ -303,6 +304,7 @@ button {
 
 .finding-card,
 .task-card,
+.manifest-card,
 .evidence-list div {
   border: 1px solid #e2e6ee;
   border-radius: 8px;
@@ -341,7 +343,8 @@ button {
 }
 
 .evidence-ref,
-.task-id {
+.task-id,
+.manifest-manager {
   color: var(--accent);
   font-size: 0.82rem;
   font-weight: 700;

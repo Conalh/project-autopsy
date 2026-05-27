@@ -86,20 +86,23 @@ export function detectManifestManager(filePath: string): ManifestManager | undef
 
 export function parseManifest(pathName: string, manager: ManifestManager, content: string): ManifestRecord {
   if (manager === "npm") {
-    const parsed = JSON.parse(content) as {
-      scripts?: Record<string, string>;
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-    };
+    return parseNpmManifest(pathName, content);
+  }
 
-    return {
-      path: pathName,
-      manager,
-      parsed: parsed as Record<string, unknown>,
-      scripts: parsed.scripts ?? {},
-      dependencies: parsed.dependencies ?? {},
-      devDependencies: parsed.devDependencies ?? {}
-    };
+  if (manager === "python") {
+    return parsePythonManifest(pathName, content);
+  }
+
+  if (manager === "rust") {
+    return parseCargoManifest(pathName, content);
+  }
+
+  if (manager === "go") {
+    return parseGoManifest(pathName, content);
+  }
+
+  if (manager === "dotnet") {
+    return parseDotnetManifest(pathName, content);
   }
 
   return {
@@ -108,6 +111,136 @@ export function parseManifest(pathName: string, manager: ManifestManager, conten
     parsed: { raw: content },
     scripts: {},
     dependencies: {},
+    devDependencies: {}
+  };
+}
+
+function parseNpmManifest(pathName: string, content: string): ManifestRecord {
+  const parsed = JSON.parse(content) as {
+    scripts?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+
+  return {
+    path: pathName,
+    manager: "npm",
+    parsed: parsed as Record<string, unknown>,
+    scripts: parsed.scripts ?? {},
+    dependencies: parsed.dependencies ?? {},
+    devDependencies: parsed.devDependencies ?? {}
+  };
+}
+
+function parsePythonManifest(pathName: string, content: string): ManifestRecord {
+  if (pathName.toLowerCase().endsWith("requirements.txt")) {
+    return {
+      path: pathName,
+      manager: "python",
+      parsed: { format: "requirements.txt" },
+      scripts: {},
+      dependencies: parseRequirementLines(content),
+      devDependencies: {}
+    };
+  }
+
+  const project = readTomlSection(content, "project");
+  const scriptsSection = readTomlSection(content, "project.scripts");
+  const optionalDependencies = readTomlSection(content, "project.optional-dependencies");
+
+  return {
+    path: pathName,
+    manager: "python",
+    parsed: {
+      name: readTomlString(project, "name"),
+      version: readTomlString(project, "version"),
+      requiresPython: readTomlString(project, "requires-python")
+    },
+    scripts: readTomlStringMap(scriptsSection),
+    dependencies: parseRequirementEntries(readTomlArray(project, "dependencies")),
+    devDependencies: parseRequirementEntries(readTomlArrays(optionalDependencies).flatMap((entry) => entry.values))
+  };
+}
+
+function parseCargoManifest(pathName: string, content: string): ManifestRecord {
+  const cargoPackage = readTomlSection(content, "package");
+
+  return {
+    path: pathName,
+    manager: "rust",
+    parsed: {
+      name: readTomlString(cargoPackage, "name"),
+      version: readTomlString(cargoPackage, "version"),
+      edition: readTomlString(cargoPackage, "edition")
+    },
+    scripts: {},
+    dependencies: readCargoDependencies(readTomlSection(content, "dependencies")),
+    devDependencies: readCargoDependencies(readTomlSection(content, "dev-dependencies"))
+  };
+}
+
+function parseGoManifest(pathName: string, content: string): ManifestRecord {
+  const lines = content.split(/\r?\n/);
+  const dependencies: Record<string, string> = {};
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = stripGoComment(lines[index] ?? "").trim();
+    const singleRequire = line.match(/^require\s+(\S+)\s+(\S+)/);
+    if (singleRequire?.[1] && singleRequire[2]) {
+      dependencies[singleRequire[1]] = singleRequire[2];
+      continue;
+    }
+
+    if (line === "require (") {
+      index += 1;
+      while (index < lines.length) {
+        const blockLine = stripGoComment(lines[index] ?? "").trim();
+        if (blockLine === ")") {
+          break;
+        }
+        const blockRequire = blockLine.match(/^(\S+)\s+(\S+)/);
+        if (blockRequire?.[1] && blockRequire[2]) {
+          dependencies[blockRequire[1]] = blockRequire[2];
+        }
+        index += 1;
+      }
+    }
+  }
+
+  return {
+    path: pathName,
+    manager: "go",
+    parsed: {
+      module: lines.find((line) => line.startsWith("module "))?.replace(/^module\s+/, "").trim(),
+      go: lines.find((line) => line.startsWith("go "))?.replace(/^go\s+/, "").trim()
+    },
+    scripts: {},
+    dependencies,
+    devDependencies: {}
+  };
+}
+
+function parseDotnetManifest(pathName: string, content: string): ManifestRecord {
+  const dependencies: Record<string, string> = {};
+
+  for (const match of content.matchAll(/<PackageReference\b([^>]*)\/?>/gi)) {
+    const attributes = match[1] ?? "";
+    const name = readXmlAttribute(attributes, "Include") ?? readXmlAttribute(attributes, "Update");
+    const version = readXmlAttribute(attributes, "Version") ?? "";
+    if (name) {
+      dependencies[name] = version;
+    }
+  }
+
+  return {
+    path: pathName,
+    manager: "dotnet",
+    parsed: {
+      sdk: content.match(/<Project\b[^>]*\bSdk="([^"]+)"/i)?.[1],
+      targetFramework: content.match(/<TargetFramework>([^<]+)<\/TargetFramework>/i)?.[1]
+    },
+    scripts: {},
+    dependencies,
     devDependencies: {}
   };
 }
@@ -168,6 +301,138 @@ function isManifestPath(normalizedPath: string): boolean {
     normalizedPath.endsWith(".yaml") ||
     normalizedPath.endsWith(".json")
   );
+}
+
+function readTomlSection(content: string, sectionName: string): string[] {
+  const lines = content.split(/\r?\n/);
+  const sectionHeader = `[${sectionName}]`;
+  const startIndex = lines.findIndex((line) => line.trim() === sectionHeader);
+  if (startIndex === -1) {
+    return [];
+  }
+
+  const sectionLines: string[] = [];
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (/^\s*\[[^\]]+\]\s*$/.test(line)) {
+      break;
+    }
+    sectionLines.push(line);
+  }
+
+  return sectionLines;
+}
+
+function readTomlString(lines: string[], key: string): string | undefined {
+  const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`);
+  return lines.map((line) => line.match(pattern)?.[1]).find((value): value is string => Boolean(value));
+}
+
+function readTomlStringMap(lines: string[]): Record<string, string> {
+  const values: Record<string, string> = {};
+
+  for (const line of lines) {
+    const match = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*"([^"]*)"\s*$/);
+    if (match?.[1] && match[2] !== undefined) {
+      values[match[1]] = match[2];
+    }
+  }
+
+  return values;
+}
+
+function readTomlArray(lines: string[], key: string): string[] {
+  const values: string[] = [];
+  const startPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*\\[`);
+  const startIndex = lines.findIndex((line) => startPattern.test(line));
+  if (startIndex === -1) {
+    return values;
+  }
+
+  for (let index = startIndex; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    for (const match of line.matchAll(/"([^"]+)"/g)) {
+      if (match[1]) {
+        values.push(match[1]);
+      }
+    }
+    if (line.includes("]")) {
+      break;
+    }
+  }
+
+  return values;
+}
+
+function readTomlArrays(lines: string[]): Array<{ key: string; values: string[] }> {
+  const arrays: Array<{ key: string; values: string[] }> = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const match = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*\[/);
+    if (!match?.[1]) {
+      continue;
+    }
+    arrays.push({ key: match[1], values: readTomlArray(lines.slice(index), match[1]) });
+  }
+
+  return arrays;
+}
+
+function parseRequirementLines(content: string): Record<string, string> {
+  return parseRequirementEntries(
+    content
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\s+#.*$/, "").trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#") && !line.startsWith("-"))
+  );
+}
+
+function parseRequirementEntries(entries: string[]): Record<string, string> {
+  const dependencies: Record<string, string> = {};
+
+  for (const entry of entries) {
+    const withoutMarker = entry.split(";")[0]?.trim() ?? "";
+    const match = withoutMarker.match(/^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$/);
+    if (!match?.[1]) {
+      continue;
+    }
+    dependencies[match[1]] = (match[2] ?? "").trim() || "*";
+  }
+
+  return dependencies;
+}
+
+function readCargoDependencies(lines: string[]): Record<string, string> {
+  const dependencies: Record<string, string> = {};
+
+  for (const line of lines) {
+    const match = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*(.+)$/);
+    if (!match?.[1] || !match[2]) {
+      continue;
+    }
+
+    const value = match[2].trim();
+    dependencies[match[1]] =
+      value.match(/^"([^"]+)"/)?.[1] ??
+      value.match(/\bversion\s*=\s*"([^"]+)"/)?.[1] ??
+      (value.includes("workspace") ? "workspace" : value);
+  }
+
+  return dependencies;
+}
+
+function stripGoComment(line: string): string {
+  return line.replace(/\s+\/\/.*$/, "");
+}
+
+function readXmlAttribute(attributes: string, name: string): string | undefined {
+  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}="([^"]+)"`, "i"));
+  return match?.[1];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function extractTitle(content: string): string | undefined {

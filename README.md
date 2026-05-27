@@ -12,7 +12,7 @@ The current version is a working CLI/core/web slice. It is intentionally small, 
 - Public GitHub repository inspection
 - GitHub URL parsing with optional branch selection
 - File tree classification
-- npm `package.json` manifest parsing
+- npm, Python, Rust, Go, and .NET manifest parsing
 - README and docs discovery
 - Git commit summary extraction when history is available
 - First-pass detectors for:
@@ -23,6 +23,7 @@ The current version is a working CLI/core/web slice. It is intentionally small, 
   - latest visible momentum
 - Markdown report generation
 - JSON report export
+- Dependency snapshot in reports
 - CLI command for local and public GitHub inspection
 - Web report surface for public GitHub repos and the fixture demo
 - SQLite-backed saved analysis runs
@@ -145,6 +146,12 @@ Goal 5 persistence is in place:
 - The CLI can save, list, and show analysis runs
 - The web app can save a report and reopen recent runs from the home page
 
+Goal 6 manifest parsing is in place:
+
+- Python `pyproject.toml` and `requirements.txt` dependencies normalize into report data
+- Rust `Cargo.toml`, Go `go.mod`, and .NET `.csproj` package references are parsed
+- Markdown and web reports include a dependency snapshot for supported manifests
+
 ## Commands
 
 ```powershell
@@ -160,15 +167,15 @@ node apps\cli\dist\index.js runs  # List saved analysis runs
 
 ## Current Limits
 
-- Dependency freshness is heuristic only; it does not query package registries yet.
+- Dependency freshness is not registry-backed yet; parsed versions are reported as declared.
 - Hosted mode and web UI polish are future work.
 - The analyzer never runs arbitrary commands from inspected repositories.
 - Private GitHub repositories and GitHub App installation are not implemented yet.
 
 ## Next Milestones
 
-1. Expand manifest parsing details beyond npm.
-2. Add dependency drift rules that can query registries explicitly.
-3. Save rendered sample reports for regression review.
-4. Add private GitHub or GitHub App ingestion.
-5. Add a hosted API mode behind the same core report contract.
+1. Add dependency drift rules that can query registries explicitly.
+2. Save rendered sample reports for regression review.
+3. Add private GitHub or GitHub App ingestion.
+4. Add a hosted API mode behind the same core report contract.
+5. Add report polish for timeline and dependency-focused views.
