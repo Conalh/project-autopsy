@@ -42,7 +42,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
         branch: params.branch,
         checkDependencyRegistry: params.checkRegistry === "1",
         token,
-        store: createWebRunStore()
+        store: await createWebRunStore()
       });
       return <ReportView report={saved.report} savedRunId={saved.id} />;
     }

@@ -12,7 +12,7 @@ interface SavedRunPageProps {
 
 export default async function SavedRunPage({ params }: SavedRunPageProps) {
   const { id } = await params;
-  const saved = createWebRunStore().getRun(id);
+  const saved = await (await createWebRunStore()).getRun(id);
 
   if (!saved) {
     return (

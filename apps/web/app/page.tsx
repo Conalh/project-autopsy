@@ -3,8 +3,8 @@ import { createWebRunStore } from "./lib/run-store";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  const recentRuns = createWebRunStore().listRuns(5);
+export default async function HomePage() {
+  const recentRuns = await (await createWebRunStore()).listRuns(5);
 
   return (
     <main className="shell">

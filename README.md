@@ -116,6 +116,8 @@ node apps\cli\dist\index.js show <run_id> --format markdown
 
 Saved runs live in `.project-autopsy/runs.sqlite` by default and are ignored by git.
 
+Hosted web/API runs can use Postgres by setting `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL`. When neither is present, the web surface falls back to SQLite. `PROJECT_AUTOPSY_RUN_DB_PATH` can override the local SQLite path.
+
 ## Web And API
 
 Start the Next.js app:
@@ -235,14 +237,14 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Private GitHub repos work with a supplied token.
 - Reports export as Markdown and JSON.
 - Saved run history is backed by local SQLite.
-- Hosted storage integrations can use the async Postgres run-store adapter.
+- Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
 
-- Hosted API mode is still local-first by default; production auth, queues, and automatic Postgres wiring are future work.
+- Hosted API mode is still local-first by default; production auth and queues are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App auth is env-backed; the browser installation flow is not implemented yet.
@@ -254,4 +256,4 @@ Limits worth knowing:
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
 4. Browser GitHub App installation flow for hosted/private repo access.
-5. Hosted queues and automatic Postgres-backed run storage selection.
+5. Hosted queueing for long-running repository analysis.

@@ -31,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
     if (body.save === true) {
       const saved = await analyzeAndSaveRepository(body.source, {
         ...options,
-        store: createWebRunStore()
+        store: await createWebRunStore()
       });
       const { markdown, json, ...run } = saved;
       return jsonResponse({ run, report: saved.report });

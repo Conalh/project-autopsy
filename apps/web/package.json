@@ -12,11 +12,13 @@
   "dependencies": {
     "@project-autopsy/core": "file:../../packages/core",
     "next": "^16.0.7",
+    "pg": "^8.21.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3",
