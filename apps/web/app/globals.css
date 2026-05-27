@@ -317,6 +317,124 @@ button {
   font-style: normal;
 }
 
+.run-table code {
+  width: fit-content;
+}
+
+.compare-form-panel {
+  margin-bottom: 16px;
+}
+
+.compare-form {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.compare-form label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.compare-form input {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid #c5ccda;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--text);
+}
+
+.compare-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.compare-grid,
+.comparison-kind-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.run-compare-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.run-compare-card > span,
+.score-delta-panel span,
+.score-delta-panel em {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.run-compare-card h2 {
+  margin-bottom: 0;
+}
+
+.score-delta-panel {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.score-delta-panel strong {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.delta-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.delta-grid div {
+  border: 1px solid #e2e6ee;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfe;
+}
+
+.delta-grid dd {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.delta-positive {
+  color: var(--ok);
+}
+
+.delta-negative {
+  color: var(--danger);
+}
+
+.delta-neutral {
+  color: var(--muted);
+}
+
+.comparison-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.comparison-list li {
+  overflow-wrap: anywhere;
+}
+
 .summary-grid div {
   border-left: 3px solid var(--accent);
   padding-left: 12px;
@@ -582,6 +700,10 @@ textarea {
   .report-layout,
   .summary-grid,
   .home-grid,
+  .compare-form,
+  .compare-grid,
+  .comparison-kind-grid,
+  .delta-grid,
   .page-heading,
   .run-table a {
     grid-template-columns: 1fr;
