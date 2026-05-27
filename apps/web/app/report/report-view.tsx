@@ -7,6 +7,7 @@ import {
   type RevivalTask,
   type Severity
 } from "@project-autopsy/core";
+import { buildReportNavigation } from "./report-navigation";
 import { buildDependencySummary, buildTimelineItems, type TimelineItem } from "./report-summary";
 
 export function ReportView({
@@ -20,10 +21,17 @@ export function ReportView({
   const json = renderJsonReport(report);
   const timelineItems = buildTimelineItems(report);
   const dependencySummary = buildDependencySummary(report);
+  const navigation = buildReportNavigation(report);
 
   return (
     <main className="shell report-shell">
-      <header className="report-header">
+      <nav className="top-nav" aria-label="Primary">
+        <a href="/">Inspector</a>
+        <a href="/runs">Saved runs</a>
+        <a href="/api/github-app/status">GitHub setup</a>
+      </nav>
+
+      <header id="verdict" className="report-header">
         <div>
           <a className="back-link" href="/">
             Project Autopsy
@@ -31,6 +39,11 @@ export function ReportView({
           <h1>{report.summary.projectName}</h1>
           <p>{report.verdict.summary}</p>
           {savedRunId ? <p className="saved-note">Saved as {savedRunId}</p> : null}
+          {savedRunId ? (
+            <a className="inline-action" href={`/api/runs/${savedRunId}/export.md`}>
+              Export Markdown
+            </a>
+          ) : null}
         </div>
         <div className={`score-box status-${report.verdict.status}`}>
           <span>Score</span>
@@ -38,6 +51,14 @@ export function ReportView({
           <em>{report.verdict.status}</em>
         </div>
       </header>
+
+      <nav className="report-nav" aria-label="Report sections">
+        {navigation.map((item) => (
+          <a key={item.href} href={item.href}>
+            {item.label}
+          </a>
+        ))}
+      </nav>
 
       <div className="report-layout">
         <section className="main-stack">
@@ -54,7 +75,7 @@ export function ReportView({
             </ol>
           </section>
 
-          <section className="panel">
+          <section id="timeline" className="panel">
             <h2>Activity Timeline</h2>
             {timelineItems.length > 0 ? (
               <div className="timeline-list">
@@ -67,7 +88,7 @@ export function ReportView({
             )}
           </section>
 
-          <section className="panel">
+          <section id="findings" className="panel">
             <h2>Findings</h2>
             <div className="finding-list">
               {report.findings.map((finding) => (
@@ -76,7 +97,7 @@ export function ReportView({
             </div>
           </section>
 
-          <section className="panel">
+          <section id="revival-plan" className="panel">
             <h2>Revival Plan</h2>
             <div className="task-list">
               {report.revivalTasks.map((task) => (
@@ -109,7 +130,7 @@ export function ReportView({
             </dl>
           </section>
 
-          <section className="panel">
+          <section id="dependencies" className="panel">
             <h2>Dependency Focus</h2>
             <dl className="metric-grid">
               <div>
@@ -160,7 +181,7 @@ export function ReportView({
             </details>
           </section>
 
-          <section className="panel">
+          <section id="evidence" className="panel">
             <h2>Evidence Index</h2>
             <div className="evidence-list">
               {Object.values(report.evidenceIndex).map((evidence) => (

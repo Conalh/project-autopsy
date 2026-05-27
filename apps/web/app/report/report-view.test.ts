@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { AutopsyReport } from "@project-autopsy/core";
+import { buildReportNavigation } from "./report-navigation";
 import { buildDependencySummary, buildTimelineItems } from "./report-summary";
 
 const baseReport: AutopsyReport = {
@@ -101,5 +102,16 @@ describe("report view summaries", () => {
       scriptCount: 2,
       driftFindingCount: 1
     });
+  });
+
+  test("builds report navigation labels with section counts", () => {
+    expect(buildReportNavigation(baseReport).map((item) => `${item.label}:${item.href}`)).toEqual([
+      "Verdict:#verdict",
+      "Timeline 1:#timeline",
+      "Findings 1:#findings",
+      "Revival Plan 0:#revival-plan",
+      "Dependencies 1:#dependencies",
+      "Evidence 0:#evidence"
+    ]);
   });
 });

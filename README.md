@@ -252,6 +252,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - API inspections can run through a queue and be polled by job id; hosted mode persists job payload, state, result, errors, and retry attempts in Postgres.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
+- Web UI includes saved-run browsing, GitHub setup state, and report section navigation.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -260,12 +261,12 @@ Limits worth knowing:
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
-- Web UI polish is intentionally behind the core/report contract.
+- Deeper web polish such as comparison views, sharing flows, and charts is future work.
 
 ## Roadmap
 
 1. Report polish for timeline and dependency-focused views.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
-4. Web UI polish for saved runs, setup state, and report navigation.
-5. Worker process supervision, metrics, and retention scheduling for hosted analysis.
+4. Worker process supervision, metrics, and retention scheduling for hosted analysis.
+5. Shareable report views, comparison flows, and chart polish.
