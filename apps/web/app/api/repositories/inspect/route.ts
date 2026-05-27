@@ -1,5 +1,5 @@
 import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
-import { enqueueAnalysisJob } from "../../../lib/analysis-queue";
+import { enqueueWebAnalysisJob } from "../../../lib/analysis-queue";
 import { createWebRunStore } from "../../../lib/run-store";
 import { resolveGitHubToken } from "../../../lib/github-auth";
 
@@ -31,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
     };
 
     if (body.queue === true) {
-      const job = enqueueAnalysisJob(() => inspectRepository(body.source as string, body.save === true, options));
+      const job = await enqueueWebAnalysisJob(() => inspectRepository(body.source as string, body.save === true, options));
       return jsonResponse({ job }, 202);
     }
 

@@ -1,4 +1,4 @@
-import { getAnalysisJob } from "../../../lib/analysis-queue";
+import { getWebAnalysisJob } from "../../../lib/analysis-queue";
 
 interface JobRouteContext {
   params: Promise<{
@@ -8,7 +8,7 @@ interface JobRouteContext {
 
 export async function GET(_request: Request, context: JobRouteContext): Promise<Response> {
   const { id } = await context.params;
-  const job = getAnalysisJob(id);
+  const job = await getWebAnalysisJob(id);
 
   if (!job) {
     return Response.json({ error: `Analysis job not found: ${id}` }, { status: 404 });
