@@ -159,5 +159,24 @@ describe("repository analysis", () => {
     expect(report.findings.find((finding) => finding.kind === "validation-surface")?.severity).toBe("info");
     expect(report.revivalTasks.map((task) => task.phase)).not.toContain("Phase 2");
   });
+
+  test("self-inspection ignores generated sample report and manifest coverage examples", async () => {
+    const repoPath = path.resolve("../..");
+
+    const report = await analyzeRepository(repoPath);
+    const markdown = renderMarkdownReport(report);
+    const titles = report.findings.map((finding) => finding.title);
+
+    expect(report.summary.projectName).toBe("Project Autopsy");
+    expect(markdown).toContain("# Project Autopsy\n");
+    expect(markdown).not.toContain("# Project Autopsy: Project Autopsy");
+    expect(titles).not.toContain("README references missing npm script: npm run dev");
+    expect(titles).not.toContain("Documented file is missing: docs/dashboard.png");
+    expect(titles).not.toContain("Documented file is missing: .project-autopsy/github-app-installation.json");
+    expect(titles).not.toContain("Documented file is missing: pyproject.toml");
+    expect(titles).not.toContain("Documented file is missing: requirements.txt");
+    expect(titles).not.toContain("Documented file is missing: Cargo.toml");
+    expect(titles).not.toContain("Documented file is missing: go.mod");
+  });
 }
 );

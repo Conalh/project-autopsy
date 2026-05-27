@@ -441,7 +441,16 @@ function extractTitle(content: string): string | undefined {
     .map((line) => line.trim())
     .find((line) => line.startsWith("# "));
 
-  return titleLine?.replace(/^#\s+/, "").trim();
+  const title = titleLine?.replace(/^#\s+/, "").trim();
+  return title ? stripMarkdownBadges(title) : undefined;
+}
+
+function stripMarkdownBadges(value: string): string {
+  return value
+    .replace(/\[!\[[^\]]*]\([^)]+\)]\([^)]+\)/g, "")
+    .replace(/!\[[^\]]*]\([^)]+\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractClaimedValue(content: string | undefined): string | undefined {

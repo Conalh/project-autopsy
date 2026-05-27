@@ -2,7 +2,7 @@ import type { AutopsyReport, Finding, RevivalTask, StallHypothesis } from "../ty
 
 export function renderMarkdownReport(report: AutopsyReport): string {
   const lines = [
-    `# Project Autopsy: ${report.snapshot.summary.projectName}`,
+    `# ${formatReportTitle(report.snapshot.summary.projectName)}`,
     "",
     "## Verdict",
     "",
@@ -34,6 +34,10 @@ export function renderMarkdownReport(report: AutopsyReport): string {
   ];
 
   return `${lines.join("\n").trim()}\n`;
+}
+
+function formatReportTitle(projectName: string): string {
+  return projectName.toLowerCase() === "project autopsy" ? "Project Autopsy" : `Project Autopsy: ${projectName}`;
 }
 
 function formatDependencySnapshot(report: AutopsyReport): string[] {

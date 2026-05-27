@@ -20,7 +20,7 @@ function detectMissingReadmeScripts(snapshot: RepoSnapshot, npmManifest: Manifes
     return findings;
   }
 
-  const commands = [...readme.content.matchAll(/npm\s+run\s+([a-zA-Z0-9:_-]+)/g)];
+  const commands = [...readSetupInstructionText(readme.content).matchAll(/npm\s+run\s+([a-zA-Z0-9:_-]+)/g)];
   for (const command of commands) {
     const scriptName = command[1];
     if (scriptName && !npmManifest.scripts[scriptName]) {
@@ -46,6 +46,20 @@ function detectMissingReadmeScripts(snapshot: RepoSnapshot, npmManifest: Manifes
   }
 
   return findings;
+}
+
+function readSetupInstructionText(content: string): string {
+  const sections = content.split(/(?=^#{2,3}\s+)/m);
+  const setupSections = sections.filter((section) => {
+    const heading = section.match(/^#{2,3}\s+(.+)$/m)?.[1] ?? "";
+    return /setup|install|run|usage|getting started|development/i.test(heading);
+  });
+
+  if (setupSections.length === 0) {
+    return content;
+  }
+
+  return setupSections.join("\n");
 }
 
 function detectMissingLockfile(snapshot: RepoSnapshot, npmManifest: ManifestRecord): Finding[] {

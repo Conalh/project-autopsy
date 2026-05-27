@@ -6,7 +6,7 @@ export function detectDocsDrift(snapshot: RepoSnapshot): Finding[] {
   const filePaths = new Set(snapshot.files.map((file) => file.path));
 
   for (const doc of snapshot.docs.filter(isPublicProjectDoc)) {
-    const references = [...doc.content.matchAll(/`([^`]+\.[a-zA-Z0-9]+)`/g)]
+    const references = [...readDriftScannableText(doc.content).matchAll(/`([^`]+\.[a-zA-Z0-9]+)`/g)]
       .map((match) => match[1])
       .filter((reference): reference is string => Boolean(reference));
 
@@ -39,7 +39,12 @@ export function detectDocsDrift(snapshot: RepoSnapshot): Finding[] {
 
 function isPublicProjectDoc(doc: { path: string }): boolean {
   const normalized = doc.path.toLowerCase();
-  return normalized === "readme.md" || (normalized.startsWith("docs/") && !normalized.startsWith("docs/superpowers/"));
+  return (
+    normalized === "readme.md" ||
+    (normalized.startsWith("docs/") &&
+      !normalized.startsWith("docs/superpowers/") &&
+      !normalized.startsWith("docs/sample-reports/"))
+  );
 }
 
 function shouldIgnoreReference(reference: string): boolean {
@@ -48,9 +53,20 @@ function shouldIgnoreReference(reference: string): boolean {
     reference.includes("{") ||
     reference.includes("}") ||
     reference.includes(" ") ||
+    reference.startsWith(".project-autopsy/") ||
     reference.startsWith("http://") ||
     reference.startsWith("https://")
   );
+}
+
+function readDriftScannableText(content: string): string {
+  return content
+    .split(/(?=^#{2,3}\s+)/m)
+    .filter((section) => {
+      const heading = section.match(/^#{2,3}\s+(.+)$/m)?.[1] ?? "";
+      return !/what the report contains|manifest coverage|package map/i.test(heading);
+    })
+    .join("\n");
 }
 
 function normalizeReference(docPath: string, reference: string, filePaths: Set<string>): string {
