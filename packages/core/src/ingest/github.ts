@@ -33,6 +33,7 @@ export interface GitHubInspectionOptions {
   branch?: string;
   checkDependencyRegistry?: boolean;
   npmRegistryFetch?: typeof fetch;
+  pypiRegistryFetch?: typeof fetch;
 }
 
 interface GitHubRepoResponse {

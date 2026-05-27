@@ -88,7 +88,7 @@ node apps\cli\dist\index.js inspect https://github.com/owner/private-repo
 
 ### Dependency Freshness
 
-Registry checks are opt-in. Today they query npm only and compare declared package ranges against the registry `latest` dist-tag.
+Registry checks are opt-in. Today they query npm and PyPI, then compare declared package ranges against each registry's latest published version.
 
 ```powershell
 node apps\cli\dist\index.js inspect . --format markdown --check-registry
@@ -114,7 +114,7 @@ Start the Next.js app:
 npm run web:dev
 ```
 
-The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check npm registry freshness, then open the report.
+The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check registry freshness, then open the report.
 
 The same report contract is exposed through local API routes:
 
@@ -170,7 +170,7 @@ The core package produces a normalized `RepoSnapshot` first, then runs detectors
 | Setup risk | README commands, package scripts, lockfiles, missing test script |
 | Validation surface | Source files, test files, CI/workflow hints |
 | Docs drift | Referenced local files that do not exist in the snapshot |
-| Dependency drift | Opt-in npm registry latest-major checks |
+| Dependency drift | Opt-in npm and PyPI latest-major checks |
 
 Every finding carries evidence. Evidence is promoted into a report-wide index, then findings and revival tasks reference it by stable IDs.
 
@@ -184,7 +184,7 @@ Every finding carries evidence. Evidence is promoted into a report-wide index, t
 | Go | `go.mod` |
 | .NET | `.csproj`, `.sln` detection; `.csproj` package references |
 
-Parsed dependencies appear in the dependency snapshot. Non-npm registry freshness is intentionally not claimed yet.
+Parsed dependencies appear in the dependency snapshot. Registry freshness currently checks npm and PyPI only.
 
 ## Package Map
 
@@ -230,7 +230,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 Limits worth knowing:
 
 - Hosted API mode is local-first and file-backed; production auth, queues, and Postgres are future work.
-- Registry freshness is npm-only and opt-in.
+- Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - Full GitHub App installation is not implemented yet.
 - Web UI polish is intentionally behind the core/report contract.
@@ -238,7 +238,7 @@ Limits worth knowing:
 ## Roadmap
 
 1. Report polish for timeline and dependency-focused views.
-2. Registry-backed drift checks beyond npm.
+2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
 4. GitHub App installation for hosted/private repo access.
 5. Hosted queues and Postgres-backed run storage.

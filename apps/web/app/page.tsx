@@ -31,7 +31,7 @@ export default function HomePage() {
           </label>
           <label className="check-row">
             <input name="checkRegistry" type="checkbox" value="1" />
-            Check npm registry
+            Check package registries
           </label>
           <label htmlFor="branch">Branch</label>
           <input id="branch" name="branch" type="text" placeholder="Default branch" />
