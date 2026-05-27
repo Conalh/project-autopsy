@@ -153,3 +153,30 @@ export interface AutopsyReport {
   revivalTasks: RevivalTask[];
   evidenceIndex: Record<string, Evidence>;
 }
+
+export interface SavedAnalysisRunSummary {
+  id: string;
+  source: string;
+  sourceType: SourceType;
+  projectName: string;
+  score: number;
+  verdictStatus: VerdictStatus;
+  createdAt: string;
+}
+
+export interface SavedAnalysisRun extends SavedAnalysisRunSummary {
+  report: AutopsyReport;
+  markdown: string;
+  json: string;
+}
+
+export interface AnalysisRunStore {
+  saveRun(input: {
+    source: string;
+    report: AutopsyReport;
+    markdown: string;
+    json: string;
+  }): SavedAnalysisRun;
+  listRuns(limit?: number): SavedAnalysisRunSummary[];
+  getRun(id: string): SavedAnalysisRun | undefined;
+}

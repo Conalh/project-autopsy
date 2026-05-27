@@ -4,7 +4,7 @@ Project Autopsy is a developer tool for making old, stalled, or abandoned reposi
 
 It inspects a local or public GitHub repository, gathers evidence from the file tree, package manifests, documentation, and git history, then produces an autopsy report with a score, verdict, findings, stall hypotheses, revival tasks, and source evidence.
 
-The current version is the first working CLI/core slice. It is intentionally small, deterministic, and evidence-first.
+The current version is a working CLI/core/web slice. It is intentionally small, deterministic, and evidence-first.
 
 ## What Works Today
 
@@ -25,6 +25,8 @@ The current version is the first working CLI/core slice. It is intentionally sma
 - JSON report export
 - CLI command for local and public GitHub inspection
 - Web report surface for public GitHub repos and the fixture demo
+- SQLite-backed saved analysis runs
+- Recent-run loading in the CLI and web UI
 
 ## Quick Start
 
@@ -53,6 +55,14 @@ For a deterministic demo that does not depend on the current repo state:
 ```powershell
 npm run inspect:fixture
 npm run inspect:fixture:json
+```
+
+Save an analysis run and reload it later:
+
+```powershell
+node apps\cli\dist\index.js inspect . --format json --save
+node apps\cli\dist\index.js runs
+node apps\cli\dist\index.js show <run_id> --format markdown
 ```
 
 Run the web app:
@@ -129,6 +139,12 @@ Goal 4 web surface is in place:
 - The fixture demo opens the structured report without network access
 - Report pages show score, hypotheses, findings, revival tasks, exports, and evidence
 
+Goal 5 persistence is in place:
+
+- Saved analyses are written to a local SQLite database under `.project-autopsy/`
+- The CLI can save, list, and show analysis runs
+- The web app can save a report and reopen recent runs from the home page
+
 ## Commands
 
 ```powershell
@@ -138,12 +154,14 @@ npm run check  # Build, then test
 npm run web:dev  # Start the Next.js report UI
 npm run inspect:fixture  # Print a deterministic fixture autopsy report
 npm run inspect:fixture:json  # Print the same report as JSON
+node apps\cli\dist\index.js inspect . --save  # Save an analysis run
+node apps\cli\dist\index.js runs  # List saved analysis runs
 ```
 
 ## Current Limits
 
 - Dependency freshness is heuristic only; it does not query package registries yet.
-- Hosted mode, persistence, and the web UI are future work.
+- Hosted mode and web UI polish are future work.
 - The analyzer never runs arbitrary commands from inspected repositories.
 - Private GitHub repositories and GitHub App installation are not implemented yet.
 
@@ -152,5 +170,5 @@ npm run inspect:fixture:json  # Print the same report as JSON
 1. Expand manifest parsing details beyond npm.
 2. Add dependency drift rules that can query registries explicitly.
 3. Save rendered sample reports for regression review.
-4. Build the web report surface on top of the core output.
-5. Add persistence for saved analysis runs.
+4. Add private GitHub or GitHub App ingestion.
+5. Add a hosted API mode behind the same core report contract.

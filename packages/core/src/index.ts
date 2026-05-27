@@ -8,9 +8,12 @@ export {
   type ParsedGitHubUrl
 } from "./ingest/github.js";
 export { analyzeRepository } from "./report/autopsy-report.js";
+export { analyzeAndSaveRepository, type AnalyzeAndSaveOptions } from "./report/analyze-and-save.js";
 export { renderJsonReport } from "./report/json.js";
 export { renderMarkdownReport } from "./report/markdown.js";
+export { createSqliteRunStore, defaultRunStorePath } from "./store/sqlite-run-store.js";
 export type {
+  AnalysisRunStore,
   AutopsyReport,
   CommitSummary,
   Confidence,
@@ -26,6 +29,8 @@ export type {
   ReportSummary,
   ReportVerdict,
   RevivalTask,
+  SavedAnalysisRun,
+  SavedAnalysisRunSummary,
   Severity,
   SourceType,
   StallHypothesis

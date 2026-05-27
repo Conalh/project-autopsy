@@ -118,6 +118,17 @@ h3 {
   color: var(--text);
 }
 
+.check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-row input {
+  min-height: auto;
+  width: auto;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 112px;
@@ -160,6 +171,34 @@ button {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.recent-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recent-list a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e6ee;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fbfcfe;
+  text-decoration: none;
+}
+
+.recent-list span {
+  color: var(--muted);
+}
+
+.recent-list em,
+.saved-note {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 700;
 }
 
 .summary-grid div {

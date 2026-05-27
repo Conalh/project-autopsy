@@ -12,6 +12,8 @@ coverage/
 .next/
 .vite/
 *.tsbuildinfo
+.project-autopsy/
+apps/*/.project-autopsy/
 
 # Local environment
 .env

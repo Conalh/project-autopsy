@@ -70,6 +70,24 @@ describe("project-autopsy CLI", () => {
     expect(parsed.metadata.reportSchemaVersion).toBe("1.0");
     expect(result.stderr).toBe("");
   });
+
+  test("saves, lists, and shows persisted analysis runs", async () => {
+    const repoPath = await createCliFixture();
+    const dbPath = path.join(await mkdtemp(path.join(tmpdir(), "project-autopsy-cli-store-")), "runs.sqlite");
+
+    const saved = await runCli(["inspect", repoPath, "--format", "json", "--save", "--db", dbPath]);
+    const savedJson = JSON.parse(saved.stdout);
+    const runs = await runCli(["runs", "--db", dbPath]);
+    const shown = await runCli(["show", savedJson.id, "--format", "markdown", "--db", dbPath]);
+
+    expect(saved.exitCode).toBe(0);
+    expect(savedJson.id).toMatch(/^run_/);
+    expect(runs.exitCode).toBe(0);
+    expect(runs.stdout).toContain(savedJson.id);
+    expect(runs.stdout).toContain("CLI Fixture");
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("# Project Autopsy: CLI Fixture");
+  });
 });
 
 function createGitHubFetch(): typeof fetch {
