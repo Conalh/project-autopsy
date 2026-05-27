@@ -5,6 +5,7 @@ import {
   enqueueAnalysisJob,
   enqueueWebAnalysisJob,
   getAnalysisJob,
+  listAnalysisJobs,
   getWebAnalysisJob,
   migratePostgresAnalysisJobStore,
   type PostgresQueryClient,
@@ -39,6 +40,20 @@ describe("analysis job queue", () => {
     });
   });
 
+  test("lists recent in-memory jobs for operations dashboards", async () => {
+    clearAnalysisJobs();
+
+    const first = enqueueAnalysisJob(async () => ({ ok: true }));
+    const second = enqueueAnalysisJob(async () => ({ ok: true }));
+    await waitForAnalysisJob(first.id);
+    await waitForAnalysisJob(second.id);
+
+    const listed = listAnalysisJobs(1);
+    expect(listed).toHaveLength(1);
+    expect([first.id, second.id]).toContain(listed[0]?.id);
+    expect(listed[0]).toMatchObject({ status: "completed" });
+  });
+
   test("persists queued job status and completed result in Postgres", async () => {
     const client = new FakePostgresClient();
     await migratePostgresAnalysisJobStore(client);
@@ -67,6 +82,33 @@ describe("analysis job queue", () => {
       }
     });
     expect(client.queries[0]?.text).toContain("CREATE TABLE IF NOT EXISTS analysis_jobs");
+  });
+
+  test("lists recent Postgres jobs for operations dashboards", async () => {
+    const client = new FakePostgresClient();
+    const store = createPostgresAnalysisJobStore(client);
+
+    await store.createJob({
+      id: "job_old",
+      status: "queued",
+      createdAt: "2026-05-27T06:00:00.000Z",
+      updatedAt: "2026-05-27T06:00:00.000Z"
+    });
+    await store.createJob({
+      id: "job_new",
+      status: "failed",
+      createdAt: "2026-05-27T07:00:00.000Z",
+      updatedAt: "2026-05-27T07:00:00.000Z",
+      error: "analysis failed"
+    });
+
+    await expect(store.listJobs(1)).resolves.toEqual([
+      expect.objectContaining({
+        id: "job_new",
+        status: "failed",
+        error: "analysis failed"
+      })
+    ]);
   });
 
   test("uses durable Postgres storage for hosted queued jobs", async () => {
@@ -312,6 +354,14 @@ class FakePostgresClient implements PostgresQueryClient {
       }
 
       return { rows: [{ deleted_count: count } as Row] };
+    }
+
+    if (text.includes("SELECT") && text.includes("analysis_jobs") && text.includes("ORDER BY updated_at DESC")) {
+      const limit = Number(values[0] ?? 20);
+      const rows = [...this.rows.values()]
+        .sort((left, right) => right.updated_at.localeCompare(left.updated_at))
+        .slice(0, limit);
+      return { rows: rows as Row[] };
     }
 
     if (text.includes("SELECT") && text.includes("analysis_jobs")) {

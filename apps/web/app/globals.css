@@ -473,6 +473,95 @@ button {
   overflow-wrap: anywhere;
 }
 
+.ops-panel {
+  margin-bottom: 16px;
+}
+
+.ops-storage {
+  border: 1px solid #ccd4e1;
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: var(--accent-dark);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ops-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.ops-metric-grid div {
+  border: 1px solid #e2e6ee;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfe;
+}
+
+.ops-metric-grid dd {
+  color: var(--strong);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.job-table {
+  display: grid;
+  gap: 8px;
+}
+
+.job-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px 72px minmax(160px, 0.8fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e6ee;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.job-row div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.job-row span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.job-status {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.job-status-queued {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.job-status-running {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.job-status-completed {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.job-status-failed {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 .bar-chart,
 .delta-chart {
   display: grid;
@@ -811,7 +900,9 @@ textarea {
   .compare-grid,
   .comparison-kind-grid,
   .delta-grid,
+  .ops-metric-grid,
   .page-heading,
+  .job-row,
   .run-table-row,
   .run-table-main {
     grid-template-columns: 1fr;

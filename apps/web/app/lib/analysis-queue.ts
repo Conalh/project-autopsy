@@ -27,6 +27,7 @@ export interface PostgresQueryClient {
 export interface AnalysisJobStore {
   createJob<Result = unknown>(job: AnalysisJob<Result>): Promise<AnalysisJob<Result>>;
   getJob<Result = unknown>(id: string): Promise<AnalysisJob<Result> | undefined>;
+  listJobs(limit?: number): Promise<AnalysisJob[]>;
   claimNextQueuedJob<Payload = unknown>(): Promise<AnalysisJob<unknown> & { payload?: Payload } | undefined>;
   updateJob<Result = unknown>(
     id: string,
@@ -113,6 +114,14 @@ export function getAnalysisJob<Result = unknown>(id: string): AnalysisJob<Result
   return job ? serializeJob(job as InternalAnalysisJob<Result>) : undefined;
 }
 
+export function listAnalysisJobs(limit?: number): AnalysisJob[] {
+  const normalizedLimit = normalizeListLimit(limit);
+  return [...jobs.values()]
+    .map((job) => serializeJob(job))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .slice(0, normalizedLimit);
+}
+
 export async function waitForAnalysisJob<Result = unknown>(id: string): Promise<AnalysisJob<Result>> {
   const job = jobs.get(id);
   if (!job) {
@@ -174,6 +183,18 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
       );
       const row = result.rows[0];
       return row ? toAnalysisJob(row) : undefined;
+    },
+
+    async listJobs(limit = 20) {
+      const result = await client.query<AnalysisJobRow>(
+        `SELECT id, status, created_at, updated_at, result_json, payload_json, error, attempts, max_attempts
+        FROM analysis_jobs
+        ORDER BY updated_at DESC
+        LIMIT $1`,
+        [normalizeListLimit(limit)]
+      );
+
+      return result.rows.map((row) => toAnalysisJob(row));
     },
 
     async claimNextQueuedJob<Payload = unknown>() {
@@ -276,6 +297,14 @@ export async function getWebAnalysisJob<Result = unknown>(
 ): Promise<AnalysisJob<Result> | undefined> {
   const store = await createWebAnalysisJobStore(options);
   return store ? store.getJob<Result>(id) : getAnalysisJob<Result>(id);
+}
+
+export async function listWebAnalysisJobs(
+  limit?: number,
+  options: WebAnalysisJobQueueOptions = {}
+): Promise<AnalysisJob[]> {
+  const store = await createWebAnalysisJobStore(options);
+  return store ? store.listJobs(limit) : listAnalysisJobs(limit);
 }
 
 async function runJob<Result>(job: InternalAnalysisJob<Result>, work: () => Promise<Result>): Promise<void> {
@@ -393,4 +422,8 @@ function readMaxAttempts(env: Record<string, string | undefined>): number {
 
 function normalizeMaxAttempts(value: number | undefined): number {
   return value && value > 0 ? Math.floor(value) : 1;
+}
+
+function normalizeListLimit(value: number | undefined): number {
+  return value && value > 0 ? Math.floor(value) : 20;
 }

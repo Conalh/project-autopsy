@@ -17,6 +17,7 @@ export default async function HomePage() {
       <nav className="top-nav" aria-label="Primary">
         <Link href="/">Inspector</Link>
         <Link href="/runs">Saved runs</Link>
+        <Link href="/ops">Operations</Link>
         <a href="/api/github-app/status">GitHub setup</a>
       </nav>
 
