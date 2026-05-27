@@ -7,6 +7,7 @@ import {
   type RevivalTask,
   type Severity
 } from "@project-autopsy/core";
+import { buildDependencySummary, buildTimelineItems, type TimelineItem } from "./report-summary";
 
 export function ReportView({
   report,
@@ -17,6 +18,8 @@ export function ReportView({
 }) {
   const markdown = renderMarkdownReport(report);
   const json = renderJsonReport(report);
+  const timelineItems = buildTimelineItems(report);
+  const dependencySummary = buildDependencySummary(report);
 
   return (
     <main className="shell report-shell">
@@ -49,6 +52,19 @@ export function ReportView({
                 </li>
               ))}
             </ol>
+          </section>
+
+          <section className="panel">
+            <h2>Activity Timeline</h2>
+            {timelineItems.length > 0 ? (
+              <div className="timeline-list">
+                {timelineItems.map((item) => (
+                  <TimelineRow key={item.key} item={item} />
+                ))}
+              </div>
+            ) : (
+              <p className="muted">No commit history was available for this inspection.</p>
+            )}
           </section>
 
           <section className="panel">
@@ -94,7 +110,33 @@ export function ReportView({
           </section>
 
           <section className="panel">
-            <h2>Dependencies</h2>
+            <h2>Dependency Focus</h2>
+            <dl className="metric-grid">
+              <div>
+                <dt>Manifests</dt>
+                <dd>{dependencySummary.manifestCount}</dd>
+              </div>
+              <div>
+                <dt>Managers</dt>
+                <dd>{dependencySummary.managerLabels}</dd>
+              </div>
+              <div>
+                <dt>Runtime deps</dt>
+                <dd>{dependencySummary.dependencyCount}</dd>
+              </div>
+              <div>
+                <dt>Dev deps</dt>
+                <dd>{dependencySummary.devDependencyCount}</dd>
+              </div>
+              <div>
+                <dt>Scripts</dt>
+                <dd>{dependencySummary.scriptCount}</dd>
+              </div>
+              <div>
+                <dt>Drift findings</dt>
+                <dd>{dependencySummary.driftFindingCount}</dd>
+              </div>
+            </dl>
             <div className="manifest-list">
               {report.snapshot.manifests.length > 0 ? (
                 report.snapshot.manifests.map((manifest) => (
@@ -133,6 +175,18 @@ export function ReportView({
         </aside>
       </div>
     </main>
+  );
+}
+
+function TimelineRow({ item }: { item: TimelineItem }) {
+  return (
+    <article className="timeline-row">
+      <time>{item.date}</time>
+      <div>
+        <h3>{item.title}</h3>
+        <p>{item.detail}</p>
+      </div>
+    </article>
   );
 }
 

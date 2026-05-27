@@ -1,0 +1,105 @@
+import { describe, expect, test } from "vitest";
+import type { AutopsyReport } from "@project-autopsy/core";
+import { buildDependencySummary, buildTimelineItems } from "./report-summary";
+
+const baseReport: AutopsyReport = {
+  metadata: {
+    analyzerVersion: "0.1.0",
+    reportSchemaVersion: "1.0",
+    source: "local_path",
+    generatedAt: "2026-05-26T00:00:00.000Z"
+  },
+  verdict: {
+    score: 42,
+    status: "needs-cleanup",
+    summary: "Fixture summary"
+  },
+  summary: {
+    projectName: "Fixture",
+    sourceType: "local_path",
+    fileCount: 4,
+    technologies: ["npm"],
+    findingCounts: {
+      info: 0,
+      low: 0,
+      medium: 1,
+      high: 0
+    }
+  },
+  snapshot: {
+    sourceType: "local_path",
+    rootPath: "/tmp/fixture",
+    fileCount: 4,
+    totalSizeBytes: 1200,
+    languages: {},
+    files: [],
+    manifests: [
+      {
+        path: "package.json",
+        manager: "npm",
+        parsed: {},
+        scripts: {
+          build: "tsc",
+          test: "vitest run"
+        },
+        dependencies: {
+          next: "^12.0.0",
+          react: "^17.0.0"
+        },
+        devDependencies: {
+          vitest: "^1.0.0"
+        }
+      }
+    ],
+    docs: [],
+    commits: [
+      {
+        sha: "abc1234567890",
+        authorName: "Casey Dev",
+        committedAt: "2026-05-20T10:30:00.000Z",
+        message: "restore report view"
+      }
+    ],
+    summary: {
+      projectName: "Fixture",
+      technologies: ["npm"]
+    }
+  },
+  findings: [
+    {
+      id: "FINDING-001",
+      kind: "dependency-drift",
+      severity: "medium",
+      title: "npm dependency is behind the latest major: next",
+      body: "next is behind.",
+      evidence: []
+    }
+  ],
+  stallHypotheses: [],
+  revivalTasks: [],
+  evidenceIndex: {}
+};
+
+describe("report view summaries", () => {
+  test("builds timeline items from commit evidence", () => {
+    expect(buildTimelineItems(baseReport)).toEqual([
+      {
+        key: "abc1234567890",
+        date: "2026-05-20",
+        title: "restore report view",
+        detail: "Casey Dev - abc1234"
+      }
+    ]);
+  });
+
+  test("builds dependency rollups across manifests and drift findings", () => {
+    expect(buildDependencySummary(baseReport)).toEqual({
+      manifestCount: 1,
+      managerLabels: "npm",
+      dependencyCount: 2,
+      devDependencyCount: 1,
+      scriptCount: 2,
+      driftFindingCount: 1
+    });
+  });
+});

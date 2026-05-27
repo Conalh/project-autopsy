@@ -297,7 +297,8 @@ button {
 .finding-list,
 .task-list,
 .manifest-list,
-.evidence-list {
+.evidence-list,
+.timeline-list {
   display: grid;
   gap: 10px;
 }
@@ -305,11 +306,50 @@ button {
 .finding-card,
 .task-card,
 .manifest-card,
-.evidence-list div {
+.evidence-list div,
+.timeline-row {
   border: 1px solid #e2e6ee;
   border-radius: 8px;
   padding: 12px;
   background: #fbfcfe;
+}
+
+.timeline-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.timeline-row time {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.timeline-row p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.metric-grid div {
+  border: 1px solid #e2e6ee;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfe;
+}
+
+.metric-grid dd {
+  color: var(--strong);
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .card-title-row {
@@ -420,5 +460,10 @@ textarea {
 
   h1 {
     font-size: 1.65rem;
+  }
+
+  .timeline-row,
+  .metric-grid {
+    grid-template-columns: 1fr;
   }
 }
