@@ -8,6 +8,8 @@ export interface AnalysisJob<Result = unknown> {
   status: AnalysisJobStatus;
   createdAt: string;
   updatedAt: string;
+  attempts?: number;
+  maxAttempts?: number;
   result?: Result;
   error?: string;
 }
@@ -26,8 +28,9 @@ export interface AnalysisJobStore {
   getJob<Result = unknown>(id: string): Promise<AnalysisJob<Result> | undefined>;
   updateJob<Result = unknown>(
     id: string,
-    patch: Pick<AnalysisJob<Result>, "status"> & Partial<Pick<AnalysisJob<Result>, "result" | "error">>
+    patch: Pick<AnalysisJob<Result>, "status"> & Partial<Pick<AnalysisJob<Result>, "attempts" | "result" | "error">>
   ): Promise<AnalysisJob<Result> | undefined>;
+  cleanupTerminalJobs(options: { olderThan: string }): Promise<number>;
 }
 
 interface WebAnalysisJobQueueOptions {
@@ -43,6 +46,8 @@ interface AnalysisJobRow {
   updated_at: string;
   result_json: string | Record<string, unknown> | null;
   error: string | null;
+  attempts: number | null;
+  max_attempts: number | null;
 }
 
 export const POSTGRES_ANALYSIS_JOB_SCHEMA = `
@@ -52,8 +57,16 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
   result_json JSONB,
-  error TEXT
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 1
 );
+
+ALTER TABLE analysis_jobs
+  ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE analysis_jobs
+  ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_updated_at
   ON analysis_jobs(updated_at DESC);
@@ -122,15 +135,19 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
           created_at,
           updated_at,
           result_json,
-          error
-        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+          error,
+          attempts,
+          max_attempts
+        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)`,
         [
           job.id,
           job.status,
           job.createdAt,
           job.updatedAt,
           job.result === undefined ? null : JSON.stringify(job.result),
-          job.error ?? null
+          job.error ?? null,
+          job.attempts ?? 0,
+          normalizeMaxAttempts(job.maxAttempts)
         ]
       );
 
@@ -139,7 +156,7 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
 
     async getJob(id) {
       const result = await client.query<AnalysisJobRow>(
-        `SELECT id, status, created_at, updated_at, result_json, error
+        `SELECT id, status, created_at, updated_at, result_json, error, attempts, max_attempts
         FROM analysis_jobs
         WHERE id = $1`,
         [id]
@@ -156,19 +173,36 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
           status = $2,
           updated_at = $3,
           result_json = $4::jsonb,
-          error = $5
+          error = $5,
+          attempts = $6
         WHERE id = $1
-        RETURNING id, status, created_at, updated_at, result_json, error`,
+        RETURNING id, status, created_at, updated_at, result_json, error, attempts, max_attempts`,
         [
           id,
           patch.status,
           updatedAt,
           patch.result === undefined ? null : JSON.stringify(patch.result),
-          patch.error ?? null
+          patch.error ?? null,
+          patch.attempts ?? 0
         ]
       );
       const row = result.rows[0];
       return row ? toAnalysisJob(row) : undefined;
+    },
+
+    async cleanupTerminalJobs(options) {
+      const result = await client.query<{ deleted_count: number | string }>(
+        `WITH deleted AS (
+          DELETE FROM analysis_jobs
+          WHERE status IN ('completed', 'failed')
+            AND updated_at < $1
+          RETURNING 1
+        )
+        SELECT count(*)::int AS deleted_count FROM deleted`,
+        [options.olderThan]
+      );
+
+      return Number(result.rows[0]?.deleted_count ?? 0);
     }
   };
 }
@@ -187,7 +221,9 @@ export async function enqueueWebAnalysisJob<Result>(
     id: `job_${randomUUID()}`,
     status: "queued",
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    attempts: 0,
+    maxAttempts: readMaxAttempts(options.env ?? process.env)
   };
   await store.createJob(job);
 
@@ -234,16 +270,26 @@ async function runStoredJob<Result>(
   work: () => Promise<Result>,
   store: AnalysisJobStore
 ): Promise<void> {
-  await store.updateJob(id, { status: "running" });
+  const initialJob = await store.getJob(id);
+  const maxAttempts = normalizeMaxAttempts(initialJob?.maxAttempts);
 
-  try {
-    const result = await work();
-    await store.updateJob(id, { status: "completed", result });
-  } catch (error) {
-    await store.updateJob(id, {
-      status: "failed",
-      error: error instanceof Error ? error.message : String(error)
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    await store.updateJob(id, { status: "running", attempts: attempt });
+
+    try {
+      const result = await work();
+      await store.updateJob(id, { status: "completed", attempts: attempt, result });
+      return;
+    } catch (error) {
+      if (attempt >= maxAttempts) {
+        await store.updateJob(id, {
+          status: "failed",
+          attempts: attempt,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        return;
+      }
+    }
   }
 }
 
@@ -272,6 +318,8 @@ function toAnalysisJob<Result = unknown>(row: AnalysisJobRow): AnalysisJob<Resul
     status: row.status,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
+    attempts: row.attempts ?? 0,
+    maxAttempts: normalizeMaxAttempts(row.max_attempts ?? undefined),
     ...(row.result_json === null ? {} : { result: readResultJson<Result>(row.result_json) }),
     ...(row.error ? { error: row.error } : {})
   };
@@ -297,4 +345,13 @@ function createPostgresPool(connectionString: string | undefined): Pool {
 function readEnv(env: Record<string, string | undefined>, name: string): string | undefined {
   const value = env[name]?.trim();
   return value && value.length > 0 ? value : undefined;
+}
+
+function readMaxAttempts(env: Record<string, string | undefined>): number {
+  const configured = Number.parseInt(readEnv(env, "PROJECT_AUTOPSY_ANALYSIS_JOB_MAX_ATTEMPTS") ?? "", 10);
+  return normalizeMaxAttempts(Number.isFinite(configured) ? configured : undefined);
+}
+
+function normalizeMaxAttempts(value: number | undefined): number {
+  return value && value > 0 ? Math.floor(value) : 1;
 }
