@@ -11,6 +11,7 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
+    "coverage": "npm run coverage --workspaces",
     "check": "npm run build && npm run test",
     "web:dev": "npm run dev --workspace @project-autopsy/web",
     "samples:update": "npm run build --workspace @project-autopsy/core && node scripts/sample-reports.mjs --write",
@@ -27,6 +28,7 @@
   ],
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^4.1.7",
     "typescript": "^5.9.3",
     "vitest": "^4.0.14"
   }

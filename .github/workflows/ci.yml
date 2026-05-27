@@ -35,5 +35,14 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run coverage
+        run: npm run coverage
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+
       - name: Check sample report drift
         run: npm run samples:check

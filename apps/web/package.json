@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "test": "vitest run && tsc -p tsconfig.json --noEmit"
+    "test": "vitest run && tsc -p tsconfig.json --noEmit",
+    "coverage": "vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary --coverage.reportsDirectory=../../coverage/web && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@project-autopsy/core": "file:../../packages/core",
