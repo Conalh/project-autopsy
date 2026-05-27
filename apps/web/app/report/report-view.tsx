@@ -7,7 +7,13 @@ import {
   type RevivalTask,
   type Severity
 } from "@project-autopsy/core";
-import { buildSeverityChartItems, type SeverityChartItem } from "./report-charts";
+import {
+  buildDependencyCompositionChartItems,
+  buildFindingKindChartItems,
+  buildSeverityChartItems,
+  type ReportChartItem,
+  type SeverityChartItem
+} from "./report-charts";
 import { buildReportNavigation } from "./report-navigation";
 import { buildDependencySummary, buildTimelineItems, type TimelineItem } from "./report-summary";
 
@@ -31,6 +37,8 @@ export function ReportView({
   const timelineItems = buildTimelineItems(report);
   const dependencySummary = buildDependencySummary(report);
   const severityChartItems = buildSeverityChartItems(report);
+  const findingKindChartItems = buildFindingKindChartItems(report);
+  const dependencyChartItems = buildDependencyCompositionChartItems(report);
   const navigation = buildReportNavigation(report);
 
   return (
@@ -158,8 +166,18 @@ export function ReportView({
             <SeverityChart items={severityChartItems} />
           </section>
 
+          <section className="panel">
+            <h2>Finding Mix</h2>
+            {findingKindChartItems.length > 0 ? (
+              <ReportBarChart items={findingKindChartItems} ariaLabel="Finding kind distribution" />
+            ) : (
+              <p className="muted">No findings were emitted for this report.</p>
+            )}
+          </section>
+
           <section id="dependencies" className="panel">
             <h2>Dependency Focus</h2>
+            <ReportBarChart items={dependencyChartItems} ariaLabel="Dependency composition" />
             <dl className="metric-grid">
               <div>
                 <dt>Manifests</dt>
@@ -224,6 +242,25 @@ export function ReportView({
         </aside>
       </div>
     </main>
+  );
+}
+
+function ReportBarChart({ items, ariaLabel }: { items: ReportChartItem[]; ariaLabel: string }) {
+  return (
+    <div className="bar-chart" aria-label={ariaLabel}>
+      {items.map((item) => (
+        <div key={item.key} className="bar-chart-row">
+          <div className="bar-chart-label">
+            <span>{item.label}</span>
+            <strong>{item.count}</strong>
+          </div>
+          <div className="bar-track" aria-hidden="true">
+            <span className={`bar-fill chart-fill-${item.tone}`} style={{ width: `${item.percent}%` }} />
+          </div>
+          <span className="bar-chart-percent">{item.percent}%</span>
+        </div>
+      ))}
+    </div>
   );
 }
 

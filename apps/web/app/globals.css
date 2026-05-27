@@ -676,18 +676,25 @@ button {
 }
 
 .severity-fill-high,
-.delta-fill-negative {
+.delta-fill-negative,
+.chart-fill-danger {
   background: var(--danger);
 }
 
-.severity-fill-medium {
+.severity-fill-medium,
+.chart-fill-warning {
   background: var(--warning);
 }
 
 .severity-fill-low,
 .severity-fill-info,
-.delta-fill-positive {
+.delta-fill-positive,
+.chart-fill-accent {
   background: var(--accent);
+}
+
+.chart-fill-muted {
+  background: var(--muted);
 }
 
 .summary-grid div {
@@ -839,7 +846,7 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin: 0 0 14px;
+  margin: 14px 0;
 }
 
 .metric-grid div {

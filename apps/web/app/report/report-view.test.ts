@@ -1,7 +1,11 @@
 import { describe, expect, test } from "vitest";
 import type { AutopsyReport } from "@project-autopsy/core";
 import { buildReportNavigation } from "./report-navigation";
-import { buildSeverityChartItems } from "./report-charts";
+import {
+  buildDependencyCompositionChartItems,
+  buildFindingKindChartItems,
+  buildSeverityChartItems
+} from "./report-charts";
 import { buildDependencySummary, buildTimelineItems } from "./report-summary";
 
 const baseReport: AutopsyReport = {
@@ -135,6 +139,44 @@ describe("report view summaries", () => {
       { severity: "medium", label: "Medium", count: 2, percent: 50 },
       { severity: "low", label: "Low", count: 1, percent: 25 },
       { severity: "info", label: "Info", count: 0, percent: 0 }
+    ]);
+  });
+
+  test("builds finding kind chart rows ordered by count then label", () => {
+    expect(
+      buildFindingKindChartItems({
+        ...baseReport,
+        findings: [
+          ...baseReport.findings,
+          {
+            id: "FINDING-002",
+            kind: "docs-drift",
+            severity: "medium",
+            title: "Documented file is missing: docs/dashboard.png",
+            body: "A docs reference is stale.",
+            evidence: []
+          },
+          {
+            id: "FINDING-003",
+            kind: "dependency-drift",
+            severity: "medium",
+            title: "npm dev dependency is behind the latest major: typescript",
+            body: "typescript is behind.",
+            evidence: []
+          }
+        ]
+      })
+    ).toEqual([
+      { key: "dependency-drift", label: "Dependency Drift", count: 2, percent: 67, tone: "warning" },
+      { key: "docs-drift", label: "Docs Drift", count: 1, percent: 33, tone: "warning" }
+    ]);
+  });
+
+  test("builds dependency composition chart rows from manifests", () => {
+    expect(buildDependencyCompositionChartItems(baseReport)).toEqual([
+      { key: "runtime-deps", label: "Runtime deps", count: 2, percent: 40, tone: "accent" },
+      { key: "dev-deps", label: "Dev deps", count: 1, percent: 20, tone: "warning" },
+      { key: "scripts", label: "Scripts", count: 2, percent: 40, tone: "muted" }
     ]);
   });
 });

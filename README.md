@@ -264,7 +264,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Hosted operational views can require `PROJECT_AUTOPSY_ADMIN_TOKEN`.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
-- Web UI includes saved-run browsing, shareable report URLs, saved-run comparisons, lightweight report charts, activity timeline, dependency focus, GitHub setup state, and report section navigation.
+- Web UI includes saved-run browsing, shareable report URLs, saved-run comparisons, severity/finding/dependency charts, activity timeline, dependency focus, GitHub setup state, and report section navigation.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -280,5 +280,5 @@ Limits worth knowing:
 1. Deeper timeline and dependency visualization polish.
 2. Registry-backed drift checks for Go and .NET.
 3. Coverage threshold policy and package-level coverage notes.
-4. Deeper charting and report visualization polish.
+4. Saved-run trend visualization across repeated inspections.
 5. Broader production auth and deployment hardening.
