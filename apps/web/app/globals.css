@@ -562,6 +562,36 @@ button {
   color: var(--danger);
 }
 
+.ops-alert-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ops-alert {
+  border: 1px solid #e2e6ee;
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.ops-alert strong {
+  color: var(--strong);
+}
+
+.ops-alert p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.ops-alert-warning {
+  border-left-color: var(--warning);
+}
+
+.ops-alert-critical {
+  border-left-color: var(--danger);
+}
+
 .bar-chart,
 .delta-chart {
   display: grid;

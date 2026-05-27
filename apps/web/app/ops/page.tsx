@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createWebAnalysisJobStore, listAnalysisJobs, type AnalysisJob } from "../lib/analysis-queue";
-import { buildOperationsSummary, type OperationsSummary } from "./operations-summary";
+import { buildOperationsSummary, type OperationsAlert, type OperationsSummary } from "./operations-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,7 @@ export default async function OperationsPage() {
       </header>
 
       <OperationsSummaryPanel summary={summary} />
+      <OperationsAlertsPanel alerts={summary.alerts} />
       <RecentJobsPanel jobs={jobs} />
     </main>
   );
@@ -58,6 +59,26 @@ function Metric({ label, value }: { label: string; value: string | number }) {
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+function OperationsAlertsPanel({ alerts }: { alerts: OperationsAlert[] }) {
+  return (
+    <section className="panel ops-panel">
+      <h2>Operational Alerts</h2>
+      {alerts.length > 0 ? (
+        <div className="ops-alert-list" role="list">
+          {alerts.map((alert) => (
+            <article key={`${alert.level}-${alert.title}`} className={`ops-alert ops-alert-${alert.level}`} role="listitem">
+              <strong>{alert.title}</strong>
+              <p>{alert.detail}</p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">No queue health alerts for the current job window.</p>
+      )}
+    </section>
   );
 }
 
