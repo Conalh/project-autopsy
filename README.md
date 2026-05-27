@@ -90,11 +90,13 @@ The web/API surface also supports GitHub App installation tokens through environ
 
 ```powershell
 $env:PROJECT_AUTOPSY_GITHUB_APP_ID="<app-id>"
+$env:PROJECT_AUTOPSY_GITHUB_APP_SLUG="<app-slug>"
 $env:PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID="<installation-id>"
 $env:PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH="C:\path\to\github-app-private-key.pem"
 ```
 
 Inline private keys are supported with `PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY`; escaped `\n` sequences are normalized before signing.
+If your app install URL does not follow the standard slug format, set `PROJECT_AUTOPSY_GITHUB_APP_INSTALL_URL`.
 
 ### Dependency Freshness
 
@@ -142,6 +144,8 @@ Invoke-RestMethod `
 | --- | --- |
 | `POST /api/repositories/inspect` | Inspect a local path or GitHub URL and return `{ report }` or `{ run, report }` |
 | `POST /api/repositories/inspect` with `{ "queue": true }` | Queue an inspection and return `{ job }` with HTTP `202` |
+| `GET /api/github-app/status` | Show PAT/GitHub App setup state and missing env fields |
+| `GET /api/github-app/install` | Redirect to the configured GitHub App installation URL |
 | `GET /api/jobs/{id}` | Poll an in-process queued inspection job |
 | `GET /api/runs/{id}` | Load a saved run as JSON |
 | `GET /api/runs/{id}/export.md` | Load a saved run as Markdown |
@@ -242,7 +246,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
 - API inspections can run through an in-process queue and be polled by job id.
 - Web and API routes reuse the same core package.
-- Web/API GitHub auth supports either a PAT or GitHub App installation token.
+- Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status endpoints.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -250,7 +254,7 @@ Limits worth knowing:
 - Hosted API mode is still local-first by default; production auth and durable queue workers are future work.
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
-- GitHub App auth is env-backed; the browser installation flow is not implemented yet.
+- GitHub App auth and install redirects are env-backed; callback persistence is not implemented yet.
 - Web UI polish is intentionally behind the core/report contract.
 
 ## Roadmap
@@ -258,5 +262,5 @@ Limits worth knowing:
 1. Report polish for timeline and dependency-focused views.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
-4. Browser GitHub App installation flow for hosted/private repo access.
+4. Persist GitHub App installation callback data instead of manual installation env setup.
 5. Durable hosted queue workers for long-running repository analysis.
