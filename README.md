@@ -154,6 +154,7 @@ Invoke-RestMethod `
 | `GET /api/jobs/{id}` | Poll an in-process queued inspection job |
 | `GET /api/runs/{id}` | Load a saved run as JSON |
 | `GET /api/runs/{id}/export.md` | Load a saved run as Markdown |
+| `GET /share/{id}` | Open a read-only share view for a saved run |
 | `GET /compare?left={run_id}&right={run_id}` | Compare two saved runs by score, files, tasks, severity counts, and finding kinds |
 
 ## What The Report Contains
@@ -254,7 +255,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - External workers can process bounded job batches with completion/failure/requeue metrics and terminal-job cleanup.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
-- Web UI includes saved-run browsing, saved-run comparisons, GitHub setup state, and report section navigation.
+- Web UI includes saved-run browsing, shareable report URLs, saved-run comparisons, GitHub setup state, and report section navigation.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -263,12 +264,12 @@ Limits worth knowing:
 - Registry freshness is npm/PyPI-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
-- Deeper web polish such as shareable report URLs and charts is future work.
+- Deeper web polish such as charting is future work.
 
 ## Roadmap
 
 1. Report polish for timeline and dependency-focused views.
 2. Registry-backed drift checks beyond npm and PyPI.
 3. Coverage and badge polish for the public GitHub surface.
-4. Shareable report URLs and chart polish.
+4. Chart polish for saved reports and comparisons.
 5. Deployed worker scheduling, production auth, and operational dashboards.

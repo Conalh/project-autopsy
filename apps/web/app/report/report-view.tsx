@@ -12,10 +12,18 @@ import { buildDependencySummary, buildTimelineItems, type TimelineItem } from ".
 
 export function ReportView({
   report,
-  savedRunId
+  savedRunId,
+  shareUrl,
+  sharePath,
+  markdownPath,
+  sharedView = false
 }: {
   report: AutopsyReport;
   savedRunId?: string;
+  shareUrl?: string;
+  sharePath?: string;
+  markdownPath?: string;
+  sharedView?: boolean;
 }) {
   const markdown = renderMarkdownReport(report);
   const json = renderJsonReport(report);
@@ -40,9 +48,22 @@ export function ReportView({
           <p>{report.verdict.summary}</p>
           {savedRunId ? <p className="saved-note">Saved as {savedRunId}</p> : null}
           {savedRunId ? (
-            <a className="inline-action" href={`/api/runs/${savedRunId}/export.md`}>
-              Export Markdown
-            </a>
+            <div className="report-actions">
+              {!sharedView && sharePath ? (
+                <a className="inline-action" href={sharePath}>
+                  Share report
+                </a>
+              ) : null}
+              <a className="inline-action" href={markdownPath ?? `/api/runs/${savedRunId}/export.md`}>
+                Export Markdown
+              </a>
+            </div>
+          ) : null}
+          {shareUrl ? (
+            <label className="share-url-field">
+              <span>Share URL</span>
+              <input readOnly value={shareUrl} aria-label="Shareable report URL" />
+            </label>
           ) : null}
         </div>
         <div className={`score-box status-${report.verdict.status}`}>

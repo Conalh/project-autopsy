@@ -34,16 +34,21 @@ export default async function RunsPage() {
         {runs.length > 0 ? (
           <div className="run-table" role="list">
             {runs.map((run) => (
-              <Link key={run.id} href={`/runs/${run.id}`} role="listitem">
-                <span>
-                  <strong>{run.projectName}</strong>
-                  <em>{run.source}</em>
-                  <code>{run.id}</code>
-                </span>
-                <span>{run.verdictStatus}</span>
-                <span>{run.score}/100</span>
-                <time>{run.createdAt.slice(0, 10)}</time>
-              </Link>
+              <article key={run.id} className="run-table-row" role="listitem">
+                <Link className="run-table-main" href={`/runs/${run.id}`}>
+                  <span>
+                    <strong>{run.projectName}</strong>
+                    <em>{run.source}</em>
+                    <code>{run.id}</code>
+                  </span>
+                  <span>{run.verdictStatus}</span>
+                  <span>{run.score}/100</span>
+                  <time>{run.createdAt.slice(0, 10)}</time>
+                </Link>
+                <Link className="inline-action" href={`/share/${encodeURIComponent(run.id)}`}>
+                  Share
+                </Link>
+              </article>
             ))}
           </div>
         ) : (

@@ -293,19 +293,26 @@ button {
   gap: 8px;
 }
 
-.run-table a {
+.run-table-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px 84px 112px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   border: 1px solid #e2e6ee;
   border-radius: 8px;
   padding: 12px;
   background: #fbfcfe;
+}
+
+.run-table-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px 84px 112px;
+  gap: 12px;
+  align-items: center;
   text-decoration: none;
 }
 
-.run-table span:first-child {
+.run-table-main span:first-child {
   display: grid;
   gap: 2px;
 }
@@ -319,6 +326,37 @@ button {
 
 .run-table code {
   width: fit-content;
+}
+
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.share-url-field {
+  display: grid;
+  gap: 4px;
+  max-width: 520px;
+  margin-top: 12px;
+}
+
+.share-url-field span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.share-url-field input {
+  min-height: 38px;
+  width: 100%;
+  border: 1px solid #c5ccda;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--text);
 }
 
 .compare-form-panel {
@@ -705,7 +743,8 @@ textarea {
   .comparison-kind-grid,
   .delta-grid,
   .page-heading,
-  .run-table a {
+  .run-table-row,
+  .run-table-main {
     grid-template-columns: 1fr;
   }
 

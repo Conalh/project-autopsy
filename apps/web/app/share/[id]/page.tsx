@@ -1,17 +1,18 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { createWebRunStore } from "../../lib/run-store";
 import { ReportView } from "../../report/report-view";
-import { buildShareLinks } from "../../share/share-links";
+import { buildShareLinks } from "../share-links";
 
 export const dynamic = "force-dynamic";
 
-interface SavedRunPageProps {
+interface SharedReportPageProps {
   params: Promise<{
     id: string;
   }>;
 }
 
-export default async function SavedRunPage({ params }: SavedRunPageProps) {
+export default async function SharedReportPage({ params }: SharedReportPageProps) {
   const { id } = await params;
   const saved = await (await createWebRunStore()).getRun(id);
 
@@ -19,16 +20,16 @@ export default async function SavedRunPage({ params }: SavedRunPageProps) {
     return (
       <main className="shell">
         <p className="eyebrow">Project Autopsy</p>
-        <h1>Saved run not found</h1>
+        <h1>Shared report not found</h1>
         <p className="muted">{id}</p>
-        <Link className="action-link" href="/">
-          Back to inspector
+        <Link className="action-link" href="/runs">
+          Back to saved runs
         </Link>
       </main>
     );
   }
 
-  const shareLinks = buildShareLinks(saved.id);
+  const shareLinks = buildShareLinks(saved.id, await headers());
 
   return (
     <ReportView
@@ -37,6 +38,7 @@ export default async function SavedRunPage({ params }: SavedRunPageProps) {
       sharePath={shareLinks.reportPath}
       shareUrl={shareLinks.reportUrl}
       markdownPath={shareLinks.markdownPath}
+      sharedView
     />
   );
 }
