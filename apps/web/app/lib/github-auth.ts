@@ -1,6 +1,9 @@
 import { createSign } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { readGitHubAppInstallation } from "./github-app-installation-store";
+import {
+  readWebGitHubAppInstallation,
+  type WebGitHubAppInstallationStoreOptions
+} from "./github-app-installation-store";
 
 interface GitHubTokenResponse {
   token?: string;
@@ -10,7 +13,8 @@ type GitHubAuthEnv = Record<string, string | undefined>;
 
 export async function resolveGitHubToken(
   env: GitHubAuthEnv = process.env,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  options: Omit<WebGitHubAppInstallationStoreOptions, "env"> = {}
 ): Promise<string | undefined> {
   const token = readEnv(env, "PROJECT_AUTOPSY_GITHUB_TOKEN");
   if (token) {
@@ -19,7 +23,8 @@ export async function resolveGitHubToken(
 
   const appId = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_ID");
   const installationId =
-    readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID") ?? readGitHubAppInstallation({ env })?.installationId;
+    readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID") ??
+    (await readWebGitHubAppInstallation({ ...options, env }))?.installationId;
   const privateKey = readGitHubAppPrivateKey(env);
   if (!appId || !installationId || !privateKey) {
     return undefined;

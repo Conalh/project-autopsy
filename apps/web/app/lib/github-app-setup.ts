@@ -1,4 +1,8 @@
-import { readGitHubAppInstallation } from "./github-app-installation-store";
+import {
+  readGitHubAppInstallation,
+  readWebGitHubAppInstallation,
+  type WebGitHubAppInstallationStoreOptions
+} from "./github-app-installation-store";
 
 type GitHubAppSetupEnv = Record<string, string | undefined>;
 
@@ -60,6 +64,56 @@ export function getGitHubAppSetup(env: GitHubAppSetupEnv = process.env): GitHubA
   };
 }
 
+export async function getGitHubAppSetupAsync(
+  env: GitHubAppSetupEnv = process.env,
+  options: Omit<WebGitHubAppInstallationStoreOptions, "env"> = {}
+): Promise<GitHubAppSetup> {
+  if (readEnv(env, "PROJECT_AUTOPSY_GITHUB_TOKEN")) {
+    return {
+      authMode: "token",
+      readyForPrivateRepos: true,
+      missing: []
+    };
+  }
+
+  const appId = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_ID");
+  const installation = await readInstallationIdAsync(env, options);
+  const privateKey =
+    readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY") ??
+    readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH");
+  const installUrl = readInstallUrl(env);
+  const missing = [
+    ...(!appId ? ["PROJECT_AUTOPSY_GITHUB_APP_ID"] : []),
+    ...(!installation?.id ? ["PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID"] : []),
+    ...(!privateKey ? ["PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY or PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH"] : [])
+  ];
+
+  if (appId && privateKey && installation?.id) {
+    return {
+      authMode: "github_app",
+      readyForPrivateRepos: true,
+      installUrl,
+      installationSource: installation.source,
+      missing: []
+    };
+  }
+
+  if (appId || privateKey || installUrl) {
+    return {
+      authMode: "github_app_install_required",
+      readyForPrivateRepos: false,
+      installUrl,
+      missing
+    };
+  }
+
+  return {
+    authMode: "none",
+    readyForPrivateRepos: false,
+    missing
+  };
+}
+
 function readInstallationId(
   env: GitHubAppSetupEnv
 ): { id: string; source: GitHubAppInstallationSource } | undefined {
@@ -69,6 +123,19 @@ function readInstallationId(
   }
 
   const storedInstallationId = readGitHubAppInstallation({ env })?.installationId;
+  return storedInstallationId ? { id: storedInstallationId, source: "stored" } : undefined;
+}
+
+async function readInstallationIdAsync(
+  env: GitHubAppSetupEnv,
+  options: Omit<WebGitHubAppInstallationStoreOptions, "env">
+): Promise<{ id: string; source: GitHubAppInstallationSource } | undefined> {
+  const envInstallationId = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID");
+  if (envInstallationId) {
+    return { id: envInstallationId, source: "env" };
+  }
+
+  const storedInstallationId = (await readWebGitHubAppInstallation({ ...options, env }))?.installationId;
   return storedInstallationId ? { id: storedInstallationId, source: "stored" } : undefined;
 }
 

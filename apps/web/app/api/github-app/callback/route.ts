@@ -1,6 +1,6 @@
 import { verifyGitHubAppCallbackState } from "../../../lib/github-app-callback-state";
-import { saveGitHubAppInstallation } from "../../../lib/github-app-installation-store";
-import { getGitHubAppSetup } from "../../../lib/github-app-setup";
+import { saveWebGitHubAppInstallation } from "../../../lib/github-app-installation-store";
+import { getGitHubAppSetupAsync } from "../../../lib/github-app-setup";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -28,13 +28,13 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const setupAction = url.searchParams.get("setup_action") ?? undefined;
-  const installation = saveGitHubAppInstallation({
+  const installation = await saveWebGitHubAppInstallation({
     installationId,
     setupAction
   });
 
   return Response.json({
-    githubApp: getGitHubAppSetup(),
+    githubApp: await getGitHubAppSetupAsync(),
     installation
   });
 }
