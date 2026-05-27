@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import {
   analyzeRepository,
   isGitHubUrl,
+  renderJsonReport,
   renderMarkdownReport,
   type GitHubInspectionOptions
 } from "@project-autopsy/core";
@@ -19,7 +20,7 @@ export async function runCli(args: string[], options: GitHubInspectionOptions = 
   const format = readFormat(rest);
   const branch = readOption(rest, "--branch");
 
-  if (command !== "inspect" || !targetPath || format !== "markdown") {
+  if (command !== "inspect" || !targetPath || !format) {
     return usageFailure();
   }
 
@@ -38,7 +39,7 @@ export async function runCli(args: string[], options: GitHubInspectionOptions = 
     const report = await analyzeRepository(targetPath, { ...options, branch });
     return {
       exitCode: 0,
-      stdout: renderMarkdownReport(report),
+      stdout: format === "json" ? renderJsonReport(report) : renderMarkdownReport(report),
       stderr: ""
     };
   } catch (error) {
@@ -50,9 +51,9 @@ export async function runCli(args: string[], options: GitHubInspectionOptions = 
   }
 }
 
-function readFormat(args: string[]): "markdown" | undefined {
+function readFormat(args: string[]): "markdown" | "json" | undefined {
   const value = readOption(args, "--format") ?? "markdown";
-  return value === "markdown" ? "markdown" : undefined;
+  return value === "markdown" || value === "json" ? value : undefined;
 }
 
 function readOption(args: string[], name: string): string | undefined {
@@ -70,9 +71,9 @@ function usageFailure(): CliResult {
     stdout: "",
     stderr: [
       "Usage:",
-      "  project-autopsy inspect <path-or-github-url> [--branch name] [--format markdown]",
+      "  project-autopsy inspect <path-or-github-url> [--branch name] [--format markdown|json]",
       "",
-      "This slice supports local repository paths, public GitHub URLs, and Markdown output."
+      "This slice supports local repository paths, public GitHub URLs, and Markdown or JSON output."
     ].join("\n") + "\n"
   };
 }

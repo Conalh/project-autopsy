@@ -8,6 +8,7 @@ export {
   type ParsedGitHubUrl
 } from "./ingest/github.js";
 export { analyzeRepository } from "./report/autopsy-report.js";
+export { renderJsonReport } from "./report/json.js";
 export { renderMarkdownReport } from "./report/markdown.js";
 export type {
   AutopsyReport,
@@ -21,6 +22,9 @@ export type {
   ManifestManager,
   ManifestRecord,
   RepoSnapshot,
+  ReportMetadata,
+  ReportSummary,
+  ReportVerdict,
   RevivalTask,
   Severity,
   SourceType,

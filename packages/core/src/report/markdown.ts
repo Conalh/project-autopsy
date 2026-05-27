@@ -6,7 +6,10 @@ export function renderMarkdownReport(report: AutopsyReport): string {
     "",
     "## Verdict",
     "",
-    createVerdict(report),
+    `**Score:** ${report.verdict.score}/100`,
+    `**Status:** ${report.verdict.status}`,
+    "",
+    report.verdict.summary,
     "",
     "## Project Snapshot",
     "",
@@ -23,25 +26,13 @@ export function renderMarkdownReport(report: AutopsyReport): string {
     ...report.findings.flatMap(formatFinding),
     "## Revival Plan",
     "",
-    ...report.revivalTasks.flatMap(formatTask)
+    ...report.revivalTasks.flatMap(formatTask),
+    "## Evidence Index",
+    "",
+    ...Object.values(report.evidenceIndex).flatMap(formatEvidence)
   ];
 
   return `${lines.join("\n").trim()}\n`;
-}
-
-function createVerdict(report: AutopsyReport): string {
-  const highCount = report.findings.filter((finding) => finding.severity === "high").length;
-  const mediumCount = report.findings.filter((finding) => finding.severity === "medium").length;
-
-  if (highCount > 0) {
-    return `This repo is reviveable, but ${highCount} high-severity issue(s) should be handled before feature work.`;
-  }
-
-  if (mediumCount > 0) {
-    return `This repo is reviveable with cleanup. ${mediumCount} medium-severity issue(s) need attention.`;
-  }
-
-  return "This repo looks stable in the first-pass autopsy.";
 }
 
 function formatHypothesis(hypothesis: StallHypothesis): string[] {
@@ -54,23 +45,26 @@ function formatHypothesis(hypothesis: StallHypothesis): string[] {
 
 function formatFinding(finding: Finding): string[] {
   return [
-    `- **${finding.title}** (${finding.severity})`,
+    `- **${finding.id}: ${finding.title}** (${finding.severity})`,
     `  ${finding.body}`,
-    ...finding.evidence.map((evidence) => {
-      const location = evidence.path ?? evidence.commitSha ?? evidence.kind;
-      return `  Evidence: ${location} - ${evidence.excerpt}`;
-    }),
+    `  Evidence: ${(finding.evidenceIds ?? []).map((id) => `[${id}]`).join(", ")}`,
     ""
   ];
 }
 
 function formatTask(task: RevivalTask): string[] {
   return [
-    `- **${task.phase}: ${task.title}**`,
+    `- **${task.id}: ${task.phase}: ${task.title}**`,
     `  ${task.rationale}`,
     `  Files: ${task.files.join(", ") || "No specific files"}`,
+    `  Evidence: ${(task.evidenceIds ?? []).map((id) => `[${id}]`).join(", ") || "No direct evidence"}`,
     `  Verify: \`${task.verificationCommand}\``,
     `  Expected: ${task.expectedResult}`,
     ""
   ];
+}
+
+function formatEvidence(evidence: NonNullable<AutopsyReport["evidenceIndex"][string]>): string[] {
+  const location = evidence.path ?? evidence.commitSha ?? evidence.kind;
+  return [`- **[${evidence.id}]** ${location} - ${evidence.excerpt}`];
 }

@@ -2,7 +2,7 @@
 
 Project Autopsy is a developer tool for making old, stalled, or abandoned repositories legible again.
 
-It inspects a local repository, gathers evidence from the file tree, package manifests, documentation, and git history, then produces a Markdown autopsy report with findings, stall hypotheses, and revival tasks.
+It inspects a local or public GitHub repository, gathers evidence from the file tree, package manifests, documentation, and git history, then produces an autopsy report with a score, verdict, findings, stall hypotheses, revival tasks, and source evidence.
 
 The current version is the first working CLI/core slice. It is intentionally small, deterministic, and evidence-first.
 
@@ -22,7 +22,8 @@ The current version is the first working CLI/core slice. It is intentionally sma
   - docs drift
   - latest visible momentum
 - Markdown report generation
-- CLI command for local inspection
+- JSON report export
+- CLI command for local and public GitHub inspection
 
 ## Quick Start
 
@@ -36,6 +37,7 @@ You can inspect another local repository by replacing `.` with a path:
 
 ```powershell
 node apps\cli\dist\index.js inspect C:\path\to\old-repo --format markdown
+node apps\cli\dist\index.js inspect C:\path\to\old-repo --format json
 ```
 
 Or inspect a public GitHub repository:
@@ -49,22 +51,34 @@ For a deterministic demo that does not depend on the current repo state:
 
 ```powershell
 npm run inspect:fixture
+npm run inspect:fixture:json
 ```
 
 ## Example Output
 
 ```markdown
-# Project Autopsy: project-autopsy
+# Project Autopsy: Stalled Notes App
 
 ## Verdict
 
-This repo is reviveable with cleanup. 1 medium-severity issue(s) need attention.
+**Score:** 17/100
+**Status:** at-risk
+
+This repo is reviveable, but 2 high-severity issue(s) should be handled before feature work.
 
 ## Top Findings
 
-- Project identity is unclear
-- No git history was available
-- Validation surface detected
+- FINDING-003: README references missing npm script: npm run dev
+- FINDING-006: Source code exists without a visible test surface
+
+## Revival Plan
+
+- TASK-001: Phase 1: Make setup reproducible
+- TASK-002: Phase 2: Restore a local validation command
+
+## Evidence Index
+
+- [EV-003] README.md - npm run dev
 ```
 
 ## Architecture
@@ -95,6 +109,12 @@ Goal 1 ingestion is in place:
 - GitHub ingestion reads repo metadata, recursive tree data, selected text docs, manifests, and recent commits
 - Hosted ingestion does not execute project commands
 
+Goal 3 report MVP is in place:
+
+- Reports include `metadata`, `summary`, `verdict`, `score`, `findings`, `stallHypotheses`, `revivalTasks`, and `evidenceIndex`
+- Findings and revival tasks have stable IDs
+- Markdown and JSON exports use the same structured report contract
+
 ## Commands
 
 ```powershell
@@ -102,11 +122,11 @@ npm test       # Run core and CLI tests
 npm run build  # Compile all workspaces
 npm run check  # Build, then test
 npm run inspect:fixture  # Print a deterministic fixture autopsy report
+npm run inspect:fixture:json  # Print the same report as JSON
 ```
 
 ## Current Limits
 
-- The CLI supports Markdown output only.
 - Dependency freshness is heuristic only; it does not query package registries yet.
 - Hosted mode, persistence, and the web UI are future work.
 - The analyzer never runs arbitrary commands from inspected repositories.

@@ -13,7 +13,8 @@
     "test": "npm run test --workspaces",
     "check": "npm run build && npm run test",
     "inspect:self": "node apps/cli/dist/index.js inspect . --format markdown",
-    "inspect:fixture": "node apps/cli/dist/index.js inspect fixtures/stalled-npm-app --format markdown"
+    "inspect:fixture": "node apps/cli/dist/index.js inspect fixtures/stalled-npm-app --format markdown",
+    "inspect:fixture:json": "node apps/cli/dist/index.js inspect fixtures/stalled-npm-app --format json"
   },
   "keywords": [
     "repository-analysis",

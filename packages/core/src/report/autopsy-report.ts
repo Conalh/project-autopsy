@@ -12,9 +12,14 @@ import { inspectLocalRepository } from "../ingest/local.js";
 import type {
   AutopsyReport,
   Finding,
-  RevivalTask,
   StallHypothesis
 } from "../types.js";
+import { assignEvidenceIds } from "./evidence.js";
+import { createRevivalTasks } from "./revival-plan.js";
+import { countFindings, createVerdict } from "./scoring.js";
+
+const ANALYZER_VERSION = "0.3.0";
+const REPORT_SCHEMA_VERSION = "1.0";
 
 export async function analyzeRepository(
   source: string,
@@ -23,19 +28,36 @@ export async function analyzeRepository(
   const snapshot = isGitHubUrl(source)
     ? await inspectGitHubRepository({ url: source, branch: options.branch }, options)
     : await inspectLocalRepository(source);
-  const findings = [
+  const rawFindings = [
     ...detectProjectIdentity(snapshot),
     ...detectMomentumBreak(snapshot),
     ...detectSetupRisk(snapshot),
     ...detectValidationSurface(snapshot),
     ...detectDocsDrift(snapshot)
   ];
+  const { findings, evidenceIndex } = assignEvidenceIds(rawFindings);
+  const verdict = createVerdict(findings);
 
   return {
+    metadata: {
+      analyzerVersion: ANALYZER_VERSION,
+      reportSchemaVersion: REPORT_SCHEMA_VERSION,
+      source: snapshot.sourceType,
+      generatedAt: new Date().toISOString()
+    },
+    verdict,
+    summary: {
+      projectName: snapshot.summary.projectName,
+      sourceType: snapshot.sourceType,
+      fileCount: snapshot.fileCount,
+      technologies: snapshot.summary.technologies,
+      findingCounts: countFindings(findings)
+    },
     snapshot,
     findings,
     stallHypotheses: createStallHypotheses(findings),
-    revivalTasks: createRevivalTasks(findings)
+    revivalTasks: createRevivalTasks(findings),
+    evidenceIndex
   };
 }
 
@@ -79,69 +101,4 @@ function createStallHypotheses(findings: Finding[]): StallHypothesis[] {
   }
 
   return hypotheses.map((hypothesis, index) => ({ ...hypothesis, rank: index + 1 }));
-}
-
-function createRevivalTasks(findings: Finding[]): RevivalTask[] {
-  const tasks: RevivalTask[] = [];
-
-  if (findings.some((finding) => finding.kind === "setup-risk")) {
-    tasks.push({
-      phase: "Phase 1",
-      title: "Make setup reproducible",
-      rationale: "Fix the setup and install risks before adding product behavior.",
-      files: collectEvidencePaths(findings, "setup-risk"),
-      verificationCommand: "npm install && npm run build",
-      expectedResult: "Dependencies install from a lockfile and the documented build command works.",
-      priority: 1
-    });
-  }
-
-  if (findings.some((finding) => finding.kind === "validation-surface" && finding.severity !== "info")) {
-    tasks.push({
-      phase: "Phase 2",
-      title: "Restore a local validation command",
-      rationale: "A revival needs one command that proves the current baseline.",
-      files: collectEvidencePaths(findings, "validation-surface"),
-      verificationCommand: "npm test",
-      expectedResult: "A repeatable test command exists and reports a clear result.",
-      priority: 2
-    });
-  }
-
-  if (findings.some((finding) => finding.kind === "docs-drift")) {
-    tasks.push({
-      phase: "Phase 5",
-      title: "Clean stale public documentation",
-      rationale: "Portfolio or handoff readers should not hit missing files from the README.",
-      files: collectEvidencePaths(findings, "docs-drift"),
-      verificationCommand: "Search README and docs links for missing local references",
-      expectedResult: "Documented files either exist or the references are removed.",
-      priority: 5
-    });
-  }
-
-  if (tasks.length === 0) {
-    tasks.push({
-      phase: "Phase 0",
-      title: "Preserve and inspect",
-      rationale: "The first-pass report did not find urgent risks, so start with a clean baseline.",
-      files: [],
-      verificationCommand: "git status --short",
-      expectedResult: "The repository state is understood before making revival changes.",
-      priority: 0
-    });
-  }
-
-  return tasks;
-}
-
-function collectEvidencePaths(findings: Finding[], kind: string): string[] {
-  return [
-    ...new Set(
-      findings
-        .filter((finding) => finding.kind === kind)
-        .flatMap((finding) => finding.evidence.map((item) => item.path))
-        .filter((item): item is string => Boolean(item))
-    )
-  ];
 }

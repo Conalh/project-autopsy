@@ -75,6 +75,7 @@ export type Severity = "info" | "low" | "medium" | "high";
 export type Confidence = "low" | "medium" | "high";
 
 export interface Evidence {
+  id?: string;
   kind: "file" | "commit" | "manifest" | "docs";
   path?: string;
   lineNumber?: number;
@@ -83,11 +84,13 @@ export interface Evidence {
 }
 
 export interface Finding {
+  id?: string;
   kind: string;
   severity: Severity;
   title: string;
   body: string;
   evidence: Evidence[];
+  evidenceIds?: string[];
 }
 
 export interface StallHypothesis {
@@ -99,6 +102,7 @@ export interface StallHypothesis {
 }
 
 export interface RevivalTask {
+  id?: string;
   phase: string;
   title: string;
   rationale: string;
@@ -106,11 +110,46 @@ export interface RevivalTask {
   verificationCommand: string;
   expectedResult: string;
   priority: number;
+  evidenceIds?: string[];
+}
+
+export type VerdictStatus = "stable" | "needs-cleanup" | "at-risk";
+
+export interface ReportVerdict {
+  score: number;
+  status: VerdictStatus;
+  summary: string;
+}
+
+export interface FindingCounts {
+  info: number;
+  low: number;
+  medium: number;
+  high: number;
+}
+
+export interface ReportSummary {
+  projectName: string;
+  sourceType: SourceType;
+  fileCount: number;
+  technologies: string[];
+  findingCounts: FindingCounts;
+}
+
+export interface ReportMetadata {
+  analyzerVersion: string;
+  reportSchemaVersion: string;
+  source: SourceType;
+  generatedAt: string;
 }
 
 export interface AutopsyReport {
+  metadata: ReportMetadata;
+  verdict: ReportVerdict;
+  summary: ReportSummary;
   snapshot: RepoSnapshot;
   findings: Finding[];
   stallHypotheses: StallHypothesis[];
   revivalTasks: RevivalTask[];
+  evidenceIndex: Record<string, Evidence>;
 }

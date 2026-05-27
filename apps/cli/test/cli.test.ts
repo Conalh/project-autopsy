@@ -58,6 +58,18 @@ describe("project-autopsy CLI", () => {
     expect(result.stdout).toContain("README references missing npm script: npm run dev");
     expect(result.stderr).toBe("");
   });
+
+  test("prints json report output when requested", async () => {
+    const repoPath = await createCliFixture();
+
+    const result = await runCli(["inspect", repoPath, "--format", "json"]);
+    const parsed = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(parsed.verdict.status).toMatch(/stable|needs-cleanup|at-risk/);
+    expect(parsed.metadata.reportSchemaVersion).toBe("1.0");
+    expect(result.stderr).toBe("");
+  });
 });
 
 function createGitHubFetch(): typeof fetch {
