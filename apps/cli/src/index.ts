@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { stat } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   analyzeAndSaveRepository,
   analyzeRepository,
@@ -141,7 +142,19 @@ async function main(): Promise<void> {
   process.exitCode = result.exitCode;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function isCliEntrypoint(argvPath = process.argv[1], moduleUrl = import.meta.url): boolean {
+  if (!argvPath) {
+    return false;
+  }
+
+  try {
+    return realpathSync(argvPath) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return moduleUrl === pathToFileURL(argvPath).href;
+  }
+}
+
+if (isCliEntrypoint()) {
   void main();
 }
 

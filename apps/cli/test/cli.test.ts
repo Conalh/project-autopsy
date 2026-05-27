@@ -1,9 +1,10 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
 import { describe, expect, test } from "vitest";
-import { runCli } from "../src/index.js";
+import { isCliEntrypoint, runCli } from "../src/index.js";
 
 async function createCliFixture(): Promise<string> {
   const repoPath = await mkdtemp(path.join(tmpdir(), "project-autopsy-cli-"));
@@ -29,6 +30,20 @@ async function createCliFixture(): Promise<string> {
 }
 
 describe("project-autopsy CLI", () => {
+  test("recognizes the executable entrypoint through a workspace junction", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "project-autopsy-entrypoint-"));
+    const realPackage = path.join(root, "apps", "cli");
+    const linkedPackage = path.join(root, "node_modules", "@project-autopsy", "cli");
+    const entrypoint = path.join(realPackage, "dist", "index.js");
+
+    await mkdir(path.dirname(entrypoint), { recursive: true });
+    await mkdir(path.dirname(linkedPackage), { recursive: true });
+    await writeFile(entrypoint, "#!/usr/bin/env node\n");
+    await symlink(realPackage, linkedPackage, "junction");
+
+    expect(isCliEntrypoint(path.join(linkedPackage, "dist", "index.js"), pathToFileURL(entrypoint).href)).toBe(true);
+  });
+
   test("prints a markdown report for inspect path", async () => {
     const repoPath = await createCliFixture();
 

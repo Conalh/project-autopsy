@@ -18,7 +18,7 @@ flowchart LR
   Report --> Store[("SQLite\nsaved runs")]
 ```
 
-**See also:** [sample Markdown report](docs/sample-reports/stalled-npm-app.md) / [sample JSON report](docs/sample-reports/stalled-npm-app.json) / [implementation plan](PLAN.md) / [fixtures](fixtures)
+**See also:** [sample Markdown report](docs/sample-reports/stalled-npm-app.md) / [sample JSON report](docs/sample-reports/stalled-npm-app.json) / [fixtures](fixtures)
 
 ## Why This Exists
 
@@ -33,6 +33,20 @@ Project Autopsy makes that state legible. It does not run arbitrary project comm
 - What should be fixed first?
 
 ## Run It
+
+### Install The Local CLI
+
+```powershell
+npm install
+npm run build
+npm exec -- project-autopsy inspect fixtures/stalled-npm-app --format markdown
+```
+
+The workspace exposes `project-autopsy` as a local npm bin after install. If you prefer not to use `npm exec`, call the built CLI directly:
+
+```powershell
+node apps\cli\dist\index.js inspect fixtures\stalled-npm-app --format markdown
+```
 
 ### Deterministic Fixture
 
