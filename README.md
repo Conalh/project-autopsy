@@ -18,7 +18,7 @@ flowchart LR
   Report --> Store[("SQLite\nsaved runs")]
 ```
 
-**See also:** [sample Markdown report](docs/sample-reports/stalled-npm-app.md) / [sample JSON report](docs/sample-reports/stalled-npm-app.json) / [fixtures](fixtures)
+**See also:** [sample Markdown report](docs/sample-reports/stalled-npm-app.md), [sample JSON report](docs/sample-reports/stalled-npm-app.json), and [fixtures](fixtures).
 
 ## Why This Exists
 
@@ -104,7 +104,7 @@ Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views su
 
 ### Dependency Freshness
 
-Registry checks are opt-in. Today they query npm, PyPI, and crates.io, then compare declared package ranges against each registry's latest published version.
+Registry checks are opt-in. They currently query npm, PyPI, and crates.io, then compare declared package ranges against each registry's latest published version.
 
 ```powershell
 node apps\cli\dist\index.js inspect . --format markdown --check-registry
@@ -122,6 +122,8 @@ node apps\cli\dist\index.js show <run_id> --format markdown
 
 Saved runs live in `.project-autopsy/runs.sqlite` by default and are ignored by git.
 
+The web saved-runs page adds filtering, project/source grouping, score trend visualization, share links, and pairwise comparisons.
+
 Hosted web/API runs can use Postgres by setting `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL`. When neither is present, the web surface falls back to SQLite. `PROJECT_AUTOPSY_RUN_DB_PATH` can override the local SQLite path.
 Queued hosted jobs persist payload, status, result, error, and retry attempts in Postgres. Set `PROJECT_AUTOPSY_ANALYSIS_JOB_MAX_ATTEMPTS` to retry transient queued-analysis failures before a job is marked failed. Set `PROJECT_AUTOPSY_ANALYSIS_QUEUE_MODE=external` when a separate worker process will claim and process queued jobs through `processNextAnalysisJob`.
 Schedulers can trigger bounded external-worker batches through `POST /api/worker/run` with an optional JSON body such as `{ "maxJobs": 5, "cleanupTerminalJobsOlderThan": "2026-05-20T00:00:00.000Z" }`.
@@ -134,7 +136,7 @@ Start the Next.js app:
 npm run web:dev
 ```
 
-The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check registry freshness, then open the report.
+The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check registry freshness, then open the report. Saved reports can be reopened, filtered, grouped, shared, compared, and exported from the web UI.
 
 The same report contract is exposed through local API routes:
 
@@ -176,6 +178,15 @@ Invoke-RestMethod `
 - FINDING-003: README references missing npm script: npm run dev
 - FINDING-006: Source code exists without a visible test surface
 
+## Activity Timeline
+
+- 2026-05-27 latest visible commit
+
+## Dependency Focus
+
+- Manifests: 1
+- Managers: npm
+
 ## Revival Plan
 
 - TASK-001: Phase 1: Make setup reproducible
@@ -186,8 +197,7 @@ Invoke-RestMethod `
 - [EV-003] README.md - npm run dev
 ```
 
-The real report also includes a project snapshot, dependency snapshot, ranked stall hypotheses, evidence IDs, expected outcomes, and verification commands.
-Markdown exports include a recent activity timeline and dependency focus rollup so handoff readers can scan momentum and package surface before diving into raw findings.
+The real report also includes a project snapshot, dependency snapshot, ranked stall hypotheses, evidence IDs, expected outcomes, and verification commands. Markdown exports include a recent activity timeline and dependency focus rollup so handoff readers can scan momentum and package surface before diving into raw findings.
 
 ## Analysis Model
 
@@ -246,7 +256,7 @@ Current coverage focus:
 
 - Core ingestion, detectors, report schema, persistence, manifest parsing, dependency drift, and sample report drift.
 - CLI behavior for local paths, public GitHub, private token flow, save/list/show, and registry checks.
-- Web API route behavior for inspect, saved run JSON, Markdown export, and request validation.
+- Web API route behavior for inspect, saved run JSON, Markdown export, request validation, report charts, saved-run trends, and saved-run filters.
 
 ## Status
 
@@ -264,7 +274,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 - Hosted operational views can require `PROJECT_AUTOPSY_ADMIN_TOKEN`.
 - Web and API routes reuse the same core package.
 - Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
-- Web UI includes saved-run browsing with filters/grouping, score trend visualization, shareable report URLs, saved-run comparisons, severity/finding/dependency charts, activity timeline, dependency focus, GitHub setup state, and report section navigation.
+- Web UI includes saved-run browsing with filters/grouping, score trend visualization, shareable report URLs, saved-run comparisons, severity/finding/dependency charts, activity timeline, dependency focus, GitHub setup state, operations health, and report section navigation.
 - Sample reports are committed and regression-checked.
 
 Limits worth knowing:
@@ -273,12 +283,12 @@ Limits worth knowing:
 - Registry freshness is npm/PyPI/crates.io-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
-- Deeper web polish beyond the current lightweight chart panels is future work.
+- Saved-run bulk actions, retention controls, and broader production auth are future work.
 
 ## Roadmap
 
-1. Deeper timeline and dependency visualization polish.
+1. Saved-run bulk actions and retention controls.
 2. Registry-backed drift checks for Go and .NET.
 3. Coverage threshold policy and package-level coverage notes.
-4. Saved-run bulk actions and retention controls.
-5. Broader production auth and deployment hardening.
+4. Broader production auth and deployment hardening.
+5. Deeper report drilldowns for timeline, dependency, and finding history.
