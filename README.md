@@ -104,7 +104,7 @@ Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views su
 
 ### Dependency Freshness
 
-Registry checks are opt-in. Today they query npm and PyPI, then compare declared package ranges against each registry's latest published version.
+Registry checks are opt-in. Today they query npm, PyPI, and crates.io, then compare declared package ranges against each registry's latest published version.
 
 ```powershell
 node apps\cli\dist\index.js inspect . --format markdown --check-registry
@@ -200,7 +200,7 @@ The core package produces a normalized `RepoSnapshot` first, then runs detectors
 | Setup risk | README commands, package scripts, lockfiles, missing test script |
 | Validation surface | Source files, test files, CI/workflow hints |
 | Docs drift | Referenced local files that do not exist in the snapshot |
-| Dependency drift | Opt-in npm and PyPI latest-major checks |
+| Dependency drift | Opt-in npm, PyPI, and crates.io latest-major checks |
 
 Every finding carries evidence. Evidence is promoted into a report-wide index, then findings and revival tasks reference it by stable IDs.
 
@@ -214,7 +214,7 @@ Every finding carries evidence. Evidence is promoted into a report-wide index, t
 | Go | `go.mod` |
 | .NET | `.csproj`, `.sln` detection; `.csproj` package references |
 
-Parsed dependencies appear in the dependency snapshot. Registry freshness currently checks npm and PyPI only.
+Parsed dependencies appear in the dependency snapshot. Registry freshness currently checks npm, PyPI, and crates.io only.
 
 ## Package Map
 
@@ -269,7 +269,7 @@ Project Autopsy is currently a local-first portfolio/devtool slice:
 Limits worth knowing:
 
 - Hosted API mode is still local-first by default; broader production auth is future work.
-- Registry freshness is npm/PyPI-only and opt-in.
+- Registry freshness is npm/PyPI/crates.io-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
 - Deeper web polish beyond the current lightweight chart panels is future work.
@@ -277,7 +277,7 @@ Limits worth knowing:
 ## Roadmap
 
 1. Deeper timeline and dependency visualization polish.
-2. Registry-backed drift checks beyond npm and PyPI.
+2. Registry-backed drift checks for Go and .NET.
 3. Coverage and badge polish for the public GitHub surface.
 4. Deeper charting and report visualization polish.
 5. Broader production auth and deployment hardening.

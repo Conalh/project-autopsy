@@ -34,6 +34,7 @@ export interface GitHubInspectionOptions {
   checkDependencyRegistry?: boolean;
   npmRegistryFetch?: typeof fetch;
   pypiRegistryFetch?: typeof fetch;
+  cratesRegistryFetch?: typeof fetch;
 }
 
 interface GitHubRepoResponse {

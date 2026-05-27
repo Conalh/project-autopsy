@@ -56,6 +56,32 @@ async function createPythonFixture(): Promise<string> {
   return repoPath;
 }
 
+async function createRustFixture(): Promise<string> {
+  const repoPath = await mkdtemp(path.join(tmpdir(), "project-autopsy-rust-drift-"));
+  await mkdir(path.join(repoPath, "src"), { recursive: true });
+  await writeFile(path.join(repoPath, "README.md"), "# Rust Drift Fixture\n\nA Rust package drift fixture.\n");
+  await writeFile(
+    path.join(repoPath, "Cargo.toml"),
+    [
+      "[package]",
+      'name = "rust-drift-fixture"',
+      'version = "0.1.0"',
+      'edition = "2021"',
+      "",
+      "[dependencies]",
+      'clap = "3"',
+      'anyhow = "1"',
+      "",
+      "[dev-dependencies]",
+      'assert_cmd = "1"',
+      ""
+    ].join("\n")
+  );
+  await writeFile(path.join(repoPath, "src", "main.rs"), "fn main() {}\n");
+
+  return repoPath;
+}
+
 describe("dependency drift detector", () => {
   test("reports npm dependencies when registry latest versions are newer major releases", async () => {
     const repoPath = await createNpmFixture();
@@ -132,6 +158,36 @@ describe("dependency drift detector", () => {
       ])
     );
   });
+
+  test("reports Rust dependencies when crates.io latest versions are newer major releases", async () => {
+    const repoPath = await createRustFixture();
+
+    const report = await analyzeRepository(repoPath, {
+      checkDependencyRegistry: true,
+      cratesRegistryFetch: createCratesRegistryFetch({
+        clap: "4.5.0",
+        anyhow: "1.0.95",
+        assert_cmd: "2.0.16"
+      })
+    });
+
+    const driftFindings = report.findings.filter((finding) => finding.kind === "dependency-drift");
+
+    expect(driftFindings.map((finding) => finding.title)).toEqual([
+      "Rust dependency is behind the latest major: clap",
+      "Rust dev dependency is behind the latest major: assert_cmd"
+    ]);
+    expect(driftFindings[0]?.body).toContain("crates.io reports 4.5.0 as latest");
+    expect(driftFindings[0]?.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "manifest",
+          path: "Cargo.toml",
+          excerpt: "clap declared 3, latest 4.5.0"
+        })
+      ])
+    );
+  });
 });
 
 function createRegistryFetch(latestVersions: Record<string, string>): typeof fetch {
@@ -166,6 +222,21 @@ function createPypiRegistryFetch(latestVersions: Record<string, string>): typeof
     }
 
     return new Response(JSON.stringify({ info: { version: latest } }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  }) as typeof fetch;
+}
+
+function createCratesRegistryFetch(latestVersions: Record<string, string>): typeof fetch {
+  return (async (input: string | URL | Request) => {
+    const packageName = decodeURIComponent(input.toString().split("/").pop() ?? "");
+    const latest = latestVersions[packageName];
+    if (!latest) {
+      return new Response(JSON.stringify({ errors: [{ detail: "not found" }] }), { status: 404 });
+    }
+
+    return new Response(JSON.stringify({ crate: { max_version: latest } }), {
       status: 200,
       headers: { "content-type": "application/json" }
     });

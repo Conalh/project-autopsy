@@ -4,6 +4,7 @@ export interface DependencyDriftOptions {
   checkDependencyRegistry?: boolean;
   npmRegistryFetch?: typeof fetch;
   pypiRegistryFetch?: typeof fetch;
+  cratesRegistryFetch?: typeof fetch;
 }
 
 interface NpmRegistryResponse {
@@ -18,6 +19,13 @@ interface PypiRegistryResponse {
   };
 }
 
+interface CratesRegistryResponse {
+  crate?: {
+    max_version?: string;
+    newest_version?: string;
+  };
+}
+
 export async function detectDependencyDrift(
   snapshot: RepoSnapshot,
   options: DependencyDriftOptions = {}
@@ -27,7 +35,7 @@ export async function detectDependencyDrift(
   }
 
   const registryJobs = snapshot.manifests
-    .filter((manifest) => manifest.manager === "npm" || manifest.manager === "python")
+    .filter((manifest) => manifest.manager === "npm" || manifest.manager === "python" || manifest.manager === "rust")
     .map((manifest) => detectManifestDependencyDrift(manifest, options));
 
   return (await Promise.all(registryJobs)).flat();
@@ -44,6 +52,10 @@ async function detectManifestDependencyDrift(
 
     if (manifest.manager === "python") {
       return await detectPythonDependencyDrift(manifest, options.pypiRegistryFetch ?? fetch);
+    }
+
+    if (manifest.manager === "rust") {
+      return await detectRustDependencyDrift(manifest, options.cratesRegistryFetch ?? fetch);
     }
 
     return [];
@@ -130,6 +142,45 @@ async function detectPythonDependencyDrift(
   return findings;
 }
 
+async function detectRustDependencyDrift(
+  manifest: ManifestRecord,
+  registryFetch: typeof fetch
+): Promise<Finding[]> {
+  const findings: Finding[] = [];
+
+  for (const [name, declaredVersion] of Object.entries(manifest.dependencies)) {
+    const latestVersion = await fetchCratesLatestVersion(name, registryFetch);
+    const finding = createMajorDriftFinding(
+      manifest,
+      name,
+      declaredVersion,
+      latestVersion,
+      "dependency",
+      "Rust"
+    );
+    if (finding) {
+      findings.push(finding);
+    }
+  }
+
+  for (const [name, declaredVersion] of Object.entries(manifest.devDependencies)) {
+    const latestVersion = await fetchCratesLatestVersion(name, registryFetch);
+    const finding = createMajorDriftFinding(
+      manifest,
+      name,
+      declaredVersion,
+      latestVersion,
+      "dev dependency",
+      "Rust"
+    );
+    if (finding) {
+      findings.push(finding);
+    }
+  }
+
+  return findings;
+}
+
 async function fetchNpmLatestVersion(name: string, registryFetch: typeof fetch): Promise<string> {
   const response = await registryFetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
     headers: {
@@ -172,13 +223,34 @@ async function fetchPypiLatestVersion(name: string, registryFetch: typeof fetch)
   return latest;
 }
 
+async function fetchCratesLatestVersion(name: string, registryFetch: typeof fetch): Promise<string> {
+  const response = await registryFetch(`https://crates.io/api/v1/crates/${encodeURIComponent(name)}`, {
+    headers: {
+      accept: "application/json",
+      "user-agent": "project-autopsy"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`crates.io returned ${response.status} for ${name}`);
+  }
+
+  const body = (await response.json()) as CratesRegistryResponse;
+  const latest = body.crate?.max_version ?? body.crate?.newest_version;
+  if (!latest) {
+    throw new Error(`crates.io response did not include crate.max_version for ${name}`);
+  }
+
+  return latest;
+}
+
 function createMajorDriftFinding(
   manifest: ManifestRecord,
   name: string,
   declaredVersion: string,
   latestVersion: string,
   dependencyKind: "dependency" | "dev dependency",
-  ecosystem: "npm" | "Python" = "npm"
+  ecosystem: "npm" | "Python" | "Rust" = "npm"
 ): Finding | undefined {
   const declaredMajor = readMajorVersion(declaredVersion);
   const latestMajor = readMajorVersion(latestVersion);
@@ -207,9 +279,25 @@ function readMajorVersion(versionRange: string): number | undefined {
 }
 
 function formatManagerName(manager: ManifestRecord["manager"]): string {
-  return manager === "python" ? "Python" : manager;
+  if (manager === "python") {
+    return "Python";
+  }
+
+  if (manager === "rust") {
+    return "Rust";
+  }
+
+  return manager;
 }
 
-function formatRegistryName(ecosystem: "npm" | "Python"): string {
-  return ecosystem === "Python" ? "PyPI" : "npm registry";
+function formatRegistryName(ecosystem: "npm" | "Python" | "Rust"): string {
+  if (ecosystem === "Python") {
+    return "PyPI";
+  }
+
+  if (ecosystem === "Rust") {
+    return "crates.io";
+  }
+
+  return "npm registry";
 }
