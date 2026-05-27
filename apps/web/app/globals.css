@@ -36,6 +36,7 @@ a {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -290,7 +291,66 @@ button {
 
 .run-table {
   display: grid;
+  gap: 14px;
+}
+
+.run-filter-panel {
+  margin-bottom: 16px;
+}
+
+.run-filter-form {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto minmax(140px, 180px) auto minmax(140px, 180px) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.run-filter-form label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.run-filter-form input,
+.run-filter-form select {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid #c5ccda;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--text);
+}
+
+.run-group {
+  display: grid;
   gap: 8px;
+}
+
+.run-group-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid #e2e6ee;
+  padding-bottom: 8px;
+}
+
+.run-group-heading h2 {
+  margin-bottom: 2px;
+}
+
+.run-group-heading p {
+  margin-bottom: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.run-group-heading span {
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .run-trend-panel {
@@ -1045,6 +1105,7 @@ textarea {
   .summary-grid,
   .home-grid,
   .compare-form,
+  .run-filter-form,
   .compare-grid,
   .comparison-kind-grid,
   .delta-grid,
@@ -1052,7 +1113,8 @@ textarea {
   .page-heading,
   .job-row,
   .run-table-row,
-  .run-table-main {
+  .run-table-main,
+  .run-group-heading {
     grid-template-columns: 1fr;
   }
 
