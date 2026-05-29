@@ -1,6 +1,15 @@
 import { enqueueWebAnalysisJob } from "../../../lib/analysis-queue";
 import { resolveGitHubToken } from "../../../lib/github-auth";
 import {
+  clientKeyFromHeaders,
+  createInspectRateLimiter
+} from "../../../lib/inspect-rate-limit";
+import {
+  assertSourceAllowed,
+  evaluateInspectAuth,
+  SourceNotAllowedError
+} from "../../../lib/source-policy";
+import {
   inspectRepository,
   toRepositoryInspectionJobPayload
 } from "../../../lib/repository-inspection";
@@ -13,7 +22,22 @@ interface InspectRequestBody {
   queue?: unknown;
 }
 
+const rateLimiter = createInspectRateLimiter();
+
 export async function POST(request: Request): Promise<Response> {
+  const auth = evaluateInspectAuth(request.headers);
+  if (auth.configured && !auth.authorized) {
+    return jsonResponse({ error: "Unauthorized." }, 401);
+  }
+
+  const rate = rateLimiter.check(clientKeyFromHeaders(request.headers));
+  if (!rate.allowed) {
+    return new Response(JSON.stringify({ error: "Too many inspection requests. Try again shortly." }), {
+      status: 429,
+      headers: { "content-type": "application/json", "retry-after": String(rate.retryAfterSeconds) }
+    });
+  }
+
   let body: InspectRequestBody;
   try {
     body = (await request.json()) as InspectRequestBody;
@@ -26,6 +50,9 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    assertSourceAllowed(body.source);
+
+
     const options = {
       branch: typeof body.branch === "string" && body.branch.trim().length > 0 ? body.branch : undefined,
       checkDependencyRegistry: body.checkRegistry === true,
@@ -48,6 +75,9 @@ export async function POST(request: Request): Promise<Response> {
 
     return jsonResponse(await inspectRepository(body.source, body.save === true, options));
   } catch (error) {
+    if (error instanceof SourceNotAllowedError) {
+      return jsonResponse({ error: error.message }, 403);
+    }
     return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);
   }
 }

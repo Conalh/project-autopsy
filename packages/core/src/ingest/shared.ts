@@ -26,6 +26,43 @@ const SOURCE_EXTENSIONS = new Set([
 const DOC_EXTENSIONS = new Set([".md", ".mdx", ".rst", ".txt"]);
 const ASSET_EXTENSIONS = new Set([".gif", ".jpg", ".jpeg", ".png", ".svg", ".webp"]);
 
+/**
+ * Directory names that hold generated or vendored content. Manifests and docs
+ * found inside these are ignored so a single `node_modules/.../package.json`
+ * (committed by mistake) or a `dist/` copy never skews the analysis. The local
+ * walker prunes most of these; GitHub trees can still contain them.
+ */
+export const IGNORED_DIRECTORIES = new Set([
+  ".git",
+  ".next",
+  ".turbo",
+  ".cache",
+  ".venv",
+  ".tox",
+  "__pycache__",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "target",
+  "vendor"
+]);
+
+// Read caps keep ingestion bounded on large or generated-heavy repositories and
+// limit GitHub API rate-limit exposure.
+export const MAX_MANIFEST_BYTES = 1024 * 1024;
+export const MAX_DOC_BYTES = 512 * 1024;
+export const MAX_TOTAL_DOC_BYTES = 4 * 1024 * 1024;
+export const MAX_DOC_COUNT = 80;
+
+export function isVendoredPath(filePath: string): boolean {
+  return filePath
+    .toLowerCase()
+    .split("/")
+    .some((segment) => IGNORED_DIRECTORIES.has(segment));
+}
+
 export function classifyFile(filePath: string): FileKind {
   const normalized = filePath.toLowerCase();
   const extension = path.extname(normalized);
@@ -34,14 +71,7 @@ export function classifyFile(filePath: string): FileKind {
     return "workflow";
   }
 
-  if (
-    normalized.includes("/test/") ||
-    normalized.includes("/tests/") ||
-    normalized.endsWith(".test.ts") ||
-    normalized.endsWith(".spec.ts") ||
-    normalized.endsWith(".test.js") ||
-    normalized.endsWith(".spec.js")
-  ) {
+  if (isTestPath(normalized)) {
     return "test";
   }
 
@@ -64,6 +94,30 @@ export function classifyFile(filePath: string): FileKind {
   return "unknown";
 }
 
+/**
+ * Recognize tests across the common conventions of the ecosystems we ingest:
+ * JS/TS (`*.test.*`, `*.spec.*`, `*.cy.*`, `__tests__/`, e2e/cypress dirs),
+ * Python (`test_*.py`, `*_test.py`, `conftest.py`), Go (`*_test.go`), and
+ * JVM/.NET (`*Test`, `*Tests`, `*Spec`). Path-only detection cannot see Rust
+ * inline `#[cfg(test)]` modules, but `tests/` integration dirs are covered.
+ */
+function isTestPath(normalized: string): boolean {
+  if (/(^|\/)(__tests__|__test__|tests?|e2e|cypress)\//.test(normalized)) {
+    return true;
+  }
+
+  const base = path.basename(normalized);
+  return (
+    /\.(test|spec|cy)\.[cm]?[jt]sx?$/.test(base) ||
+    /^test_.*\.py$/.test(base) ||
+    /_test\.py$/.test(base) ||
+    base === "conftest.py" ||
+    /_test\.go$/.test(base) ||
+    /(test|tests|spec)\.(java|kt)$/.test(base) ||
+    /tests?\.cs$/.test(base)
+  );
+}
+
 export function isDocPath(filePath: string): boolean {
   return DOC_EXTENSIONS.has(path.extname(filePath.toLowerCase()));
 }
@@ -71,48 +125,132 @@ export function isDocPath(filePath: string): boolean {
 export function detectManifestManager(filePath: string): ManifestManager | undefined {
   const normalized = filePath.toLowerCase();
 
-  if (normalized === "package.json") return "npm";
-  if (normalized === "pyproject.toml" || normalized === "requirements.txt") return "python";
-  if (normalized === "cargo.toml") return "rust";
-  if (normalized === "go.mod") return "go";
-  if (normalized.endsWith(".csproj") || normalized.endsWith(".sln")) return "dotnet";
-  if (normalized === "dockerfile" || normalized === "compose.yaml" || normalized === "docker-compose.yml") {
+  if (normalized.startsWith(".github/workflows/")) return "github_actions";
+  if (isVendoredPath(normalized)) return undefined;
+
+  const base = path.basename(normalized);
+
+  if (base === "package.json") return "npm";
+  if (base === "pyproject.toml" || base === "requirements.txt") return "python";
+  if (base === "cargo.toml") return "rust";
+  if (base === "go.mod") return "go";
+  if (base.endsWith(".csproj") || base.endsWith(".sln")) return "dotnet";
+  if (
+    base === "dockerfile" ||
+    base === "compose.yaml" ||
+    base === "compose.yml" ||
+    base === "docker-compose.yml" ||
+    base === "docker-compose.yaml"
+  ) {
     return "docker";
   }
-  if (normalized.startsWith(".github/workflows/")) return "github_actions";
 
   return undefined;
 }
 
+/**
+ * Choose the manifests to actually read, skipping anything over the size cap so
+ * a single huge file cannot blow up ingestion or rate limits.
+ */
+export function selectManifestTargets(
+  files: FileRecord[]
+): Array<{ file: FileRecord; manager: ManifestManager }> {
+  const targets: Array<{ file: FileRecord; manager: ManifestManager }> = [];
+
+  for (const file of files) {
+    const manager = detectManifestManager(file.path);
+    if (!manager) {
+      continue;
+    }
+    if (file.sizeBytes > MAX_MANIFEST_BYTES) {
+      continue;
+    }
+    targets.push({ file, manager });
+  }
+
+  return targets;
+}
+
+/**
+ * Choose the docs to read: README first, vendored/oversized files skipped, and
+ * bounded by per-file size, total bytes, and count. Returns the chosen files
+ * plus how many eligible docs were dropped so callers can warn instead of
+ * silently truncating.
+ */
+export function selectDocTargets(files: FileRecord[]): { files: FileRecord[]; skipped: number } {
+  const eligible = files
+    .filter((file) => file.kind === "docs" && isDocPath(file.path) && !isVendoredPath(file.path))
+    .sort(
+      (left, right) => scoreDocPath(left.path) - scoreDocPath(right.path) || left.path.localeCompare(right.path)
+    );
+
+  const selected: FileRecord[] = [];
+  let totalBytes = 0;
+
+  for (const file of eligible) {
+    if (selected.length >= MAX_DOC_COUNT) {
+      break;
+    }
+    if (file.sizeBytes > MAX_DOC_BYTES) {
+      continue;
+    }
+    if (totalBytes + file.sizeBytes > MAX_TOTAL_DOC_BYTES) {
+      break;
+    }
+    totalBytes += file.sizeBytes;
+    selected.push(file);
+  }
+
+  return { files: selected, skipped: eligible.length - selected.length };
+}
+
+export function scoreDocPath(filePath: string): number {
+  return filePath.toLowerCase() === "readme.md" ? 0 : 1;
+}
+
 export function parseManifest(pathName: string, manager: ManifestManager, content: string): ManifestRecord {
-  if (manager === "npm") {
-    return parseNpmManifest(pathName, content);
-  }
+  try {
+    if (manager === "npm") {
+      return parseNpmManifest(pathName, content);
+    }
 
-  if (manager === "python") {
-    return parsePythonManifest(pathName, content);
-  }
+    if (manager === "python") {
+      return parsePythonManifest(pathName, content);
+    }
 
-  if (manager === "rust") {
-    return parseCargoManifest(pathName, content);
-  }
+    if (manager === "rust") {
+      return parseCargoManifest(pathName, content);
+    }
 
-  if (manager === "go") {
-    return parseGoManifest(pathName, content);
-  }
+    if (manager === "go") {
+      return parseGoManifest(pathName, content);
+    }
 
-  if (manager === "dotnet") {
-    return parseDotnetManifest(pathName, content);
-  }
+    if (manager === "dotnet") {
+      return parseDotnetManifest(pathName, content);
+    }
 
-  return {
-    path: pathName,
-    manager,
-    parsed: { raw: content },
-    scripts: {},
-    dependencies: {},
-    devDependencies: {}
-  };
+    return {
+      path: pathName,
+      manager,
+      parsed: { raw: content },
+      scripts: {},
+      dependencies: {},
+      devDependencies: {}
+    };
+  } catch (error) {
+    // A tool that analyzes broken/stale repos must not crash on a malformed
+    // manifest. Degrade to an empty record and let detectors surface a finding.
+    return {
+      path: pathName,
+      manager,
+      parsed: { raw: content.slice(0, 500) },
+      scripts: {},
+      dependencies: {},
+      devDependencies: {},
+      parseError: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 function parseNpmManifest(pathName: string, content: string): ManifestRecord {
@@ -255,7 +393,11 @@ export function createDocRecord(pathName: string, content: string): DocRecord {
 
 export function summarizeProject(docs: DocRecord[], manifests: ManifestRecord[], fallbackName: string) {
   const readme = docs.find((doc) => doc.path.toLowerCase() === "readme.md");
-  const npmManifest = manifests.find((manifest) => manifest.manager === "npm");
+  // Prefer a root-level manifest's name; nested workspace manifests should not
+  // override the repository's identity now that they are discovered too.
+  const namingManifest =
+    manifests.find((manifest) => !manifest.path.includes("/") && manifest.parsed.name) ??
+    manifests.find((manifest) => manifest.manager === "npm" && manifest.parsed.name);
   const technologies = new Set<string>();
 
   for (const manifest of manifests) {
@@ -269,7 +411,7 @@ export function summarizeProject(docs: DocRecord[], manifests: ManifestRecord[],
   }
 
   return {
-    projectName: readme?.title ?? ((npmManifest?.parsed.name as string | undefined) ?? fallbackName),
+    projectName: readme?.title ?? ((namingManifest?.parsed.name as string | undefined) ?? fallbackName),
     claimedValue: extractClaimedValue(readme?.content),
     technologies: [...technologies].sort()
   };

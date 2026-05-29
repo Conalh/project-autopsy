@@ -2,12 +2,22 @@ import type { Finding, ManifestRecord, RepoSnapshot } from "../types.js";
 
 export function detectSetupRisk(snapshot: RepoSnapshot): Finding[] {
   const findings: Finding[] = [];
-  const npmManifest = snapshot.manifests.find((manifest) => manifest.manager === "npm");
+  const npmManifests = snapshot.manifests.filter(
+    (manifest) => manifest.manager === "npm" && !manifest.parseError
+  );
+  // README scripts and the lockfile live at the repository root; nested
+  // workspace manifests share them, so check those once against the root.
+  const rootNpm = npmManifests.find((manifest) => !manifest.path.includes("/")) ?? npmManifests[0];
 
-  if (npmManifest) {
-    findings.push(...detectMissingReadmeScripts(snapshot, npmManifest));
-    findings.push(...detectMissingLockfile(snapshot, npmManifest));
-    findings.push(...detectMissingTestScript(npmManifest));
+  if (rootNpm) {
+    findings.push(...detectMissingReadmeScripts(snapshot, rootNpm));
+    findings.push(...detectMissingLockfile(snapshot, rootNpm));
+  }
+
+  // A missing test script is reported per manifest so monorepo workspaces get
+  // path-specific findings instead of one root-only assumption.
+  for (const manifest of npmManifests) {
+    findings.push(...detectMissingTestScript(manifest));
   }
 
   return findings;
@@ -92,7 +102,9 @@ function detectMissingLockfile(snapshot: RepoSnapshot, npmManifest: ManifestReco
 }
 
 function detectMissingTestScript(npmManifest: ManifestRecord): Finding[] {
-  if (npmManifest.scripts.test) {
+  // Only flag packages that actually define scripts; a script-less workspace
+  // leaf legitimately has no test command and should not generate noise.
+  if (Object.keys(npmManifest.scripts).length === 0 || npmManifest.scripts.test) {
     return [];
   }
 
@@ -100,7 +112,10 @@ function detectMissingTestScript(npmManifest: ManifestRecord): Finding[] {
     {
       kind: "setup-risk",
       severity: "medium",
-      title: "No npm test script is defined",
+      title:
+        npmManifest.path === "package.json"
+          ? "No npm test script is defined"
+          : `No npm test script is defined: ${npmManifest.path}`,
       body: "The package has scripts, but no standard local validation command.",
       evidence: [
         {

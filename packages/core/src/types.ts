@@ -32,6 +32,11 @@ export interface ManifestRecord {
   scripts: Record<string, string>;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
+  /**
+   * Set when the manifest could not be parsed. Dependencies/scripts are left
+   * empty so downstream detectors degrade gracefully instead of crashing.
+   */
+  parseError?: string;
 }
 
 export interface DocRecord {
@@ -69,6 +74,12 @@ export interface RepoSnapshot {
   docs: DocRecord[];
   commits: CommitSummary[];
   summary: SnapshotSummary;
+  /**
+   * Non-fatal problems encountered while ingesting the repository (e.g. a
+   * truncated GitHub tree or files skipped by size/count caps). Surfaced as
+   * findings so a report never silently claims completeness it does not have.
+   */
+  ingestionWarnings?: string[];
 }
 
 export type Severity = "info" | "low" | "medium" | "high";

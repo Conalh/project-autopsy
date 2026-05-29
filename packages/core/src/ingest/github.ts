@@ -8,12 +8,16 @@ import type {
 import {
   classifyFile,
   createDocRecord,
-  detectManifestManager,
-  isDocPath,
   parseManifest,
+  selectDocTargets,
+  selectManifestTargets,
   summarizeLanguages,
   summarizeProject
 } from "./shared.js";
+import { fetchWithTimeout, mapWithConcurrency } from "../util/async.js";
+
+const GITHUB_READ_CONCURRENCY = 6;
+const GITHUB_FETCH_TIMEOUT_MS = 15000;
 
 export interface GitHubRepositoryInput {
   url: string;
@@ -77,6 +81,18 @@ interface GitHubCommitResponse {
   };
 }
 
+interface GitHubBranchResponse {
+  name: string;
+  commit?: { sha?: string };
+}
+
+interface ResolvedBranch {
+  /** The branch name to report and to query commits with. */
+  branch: string;
+  /** A commit sha to fetch the tree with when the ref contained a slash. */
+  treeRef: string;
+}
+
 export function parseGitHubUrl(value: string): ParsedGitHubUrl {
   let parsed: URL;
   try {
@@ -98,7 +114,16 @@ export function parseGitHubUrl(value: string): ParsedGitHubUrl {
   }
 
   const repo = rawRepo.replace(/\.git$/i, "");
-  const branch = parts[2] === "tree" ? parts[3] : undefined;
+  // A `/tree/<ref>` URL can carry a slash-containing branch (e.g. `feature/foo`)
+  // and/or a trailing sub-path. Capture everything after `tree` as the raw ref;
+  // the ingester disambiguates branch vs. path against the branches API.
+  const branch =
+    parts[2] === "tree" && parts.length > 3
+      ? parts
+          .slice(3)
+          .map((segment) => decodeURIComponent(segment))
+          .join("/")
+      : undefined;
 
   return {
     owner,
@@ -125,10 +150,22 @@ export async function inspectGitHubRepository(
   const repo = await request<GitHubRepoResponse>(`/repos/${parsed.owner}/${parsed.repo}`, {
     repoUrl: parsed.url
   });
-  const branch = input.branch ?? parsed.branch ?? repo.default_branch;
-  const tree = await request<GitHubTreeResponse>(
-    `/repos/${parsed.owner}/${parsed.repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`
+  const { branch, treeRef } = await resolveBranch(
+    request,
+    parsed,
+    input.branch ?? parsed.branch,
+    repo.default_branch
   );
+  const tree = await request<GitHubTreeResponse>(
+    `/repos/${parsed.owner}/${parsed.repo}/git/trees/${encodeURIComponent(treeRef)}?recursive=1`
+  );
+
+  const ingestionWarnings: string[] = [];
+  if (tree.truncated) {
+    ingestionWarnings.push(
+      "GitHub returned a truncated file tree for this repository, so the report is built from an incomplete file list. Missing-file, missing-test, and dependency conclusions may be wrong."
+    );
+  }
 
   const files = tree.tree
     .filter((item) => item.type === "blob")
@@ -140,9 +177,14 @@ export async function inspectGitHubRepository(
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
 
-  const manifests = await readGitHubManifests(request, parsed, branch, files);
-  const docs = await readGitHubDocs(request, parsed, branch, files);
-  const commits = await readGitHubCommits(request, parsed, branch);
+  const manifests = await readGitHubManifests(request, parsed, treeRef, files);
+  const { docs, skipped } = await readGitHubDocs(request, parsed, treeRef, files);
+  if (skipped > 0) {
+    ingestionWarnings.push(
+      `${skipped} documentation file(s) were skipped by size/count limits and were not analyzed.`
+    );
+  }
+  const commits = await readGitHubCommits(request, parsed, treeRef);
   const summary = summarizeProject(docs, manifests, repo.name);
 
   return {
@@ -160,8 +202,44 @@ export async function inspectGitHubRepository(
     manifests,
     docs,
     commits,
-    summary
+    summary,
+    ...(ingestionWarnings.length > 0 ? { ingestionWarnings } : {})
   };
+}
+
+/**
+ * Disambiguate the ref parsed from a `/tree/<ref>` URL. Simple refs (no slash)
+ * are used as-is. A slash-containing ref is ambiguous between a branch with a
+ * slash and a branch plus sub-path, so we consult the branches API and pick the
+ * longest branch name that matches, fetching the tree by that branch's sha.
+ */
+async function resolveBranch(
+  request: <T>(pathName: string) => Promise<T>,
+  repo: ParsedGitHubUrl,
+  candidate: string | undefined,
+  defaultBranch: string
+): Promise<ResolvedBranch> {
+  const ref = candidate ?? defaultBranch;
+  if (!ref.includes("/")) {
+    return { branch: ref, treeRef: ref };
+  }
+
+  try {
+    const branches = await request<GitHubBranchResponse[]>(
+      `/repos/${repo.owner}/${repo.repo}/branches?per_page=100`
+    );
+    const match = branches
+      .filter((entry) => ref === entry.name || ref.startsWith(`${entry.name}/`))
+      .sort((left, right) => right.name.length - left.name.length)[0];
+
+    if (match?.commit?.sha) {
+      return { branch: match.name, treeRef: match.commit.sha };
+    }
+  } catch {
+    // Fall through to a best-effort attempt with the raw ref.
+  }
+
+  return { branch: ref, treeRef: ref };
 }
 
 async function readGitHubManifests(
@@ -170,19 +248,25 @@ async function readGitHubManifests(
   branch: string,
   files: FileRecord[]
 ): Promise<ManifestRecord[]> {
-  const manifests: ManifestRecord[] = [];
+  const targets = selectManifestTargets(files);
 
-  for (const file of files) {
-    const manager = detectManifestManager(file.path);
-    if (!manager) {
-      continue;
+  return mapWithConcurrency(targets, GITHUB_READ_CONCURRENCY, async ({ file, manager }) => {
+    try {
+      const content = await readGitHubFile(request, repo, branch, file.path);
+      return parseManifest(file.path, manager, content);
+    } catch (error) {
+      // A single unreadable manifest should become a finding, not abort the run.
+      return {
+        path: file.path,
+        manager,
+        parsed: {},
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+        parseError: error instanceof Error ? error.message : String(error)
+      } satisfies ManifestRecord;
     }
-
-    const content = await readGitHubFile(request, repo, branch, file.path);
-    manifests.push(parseManifest(file.path, manager, content));
-  }
-
-  return manifests;
+  });
 }
 
 async function readGitHubDocs(
@@ -190,18 +274,20 @@ async function readGitHubDocs(
   repo: ParsedGitHubUrl,
   branch: string,
   files: FileRecord[]
-) {
-  const docs = [];
-  const docFiles = files
-    .filter((file) => file.kind === "docs" && isDocPath(file.path))
-    .sort((left, right) => scoreDocPath(left.path) - scoreDocPath(right.path) || left.path.localeCompare(right.path));
+): Promise<{ docs: ReturnType<typeof createDocRecord>[]; skipped: number }> {
+  const { files: docFiles, skipped } = selectDocTargets(files);
 
-  for (const file of docFiles) {
-    const content = await readGitHubFile(request, repo, branch, file.path);
-    docs.push(createDocRecord(file.path, content));
-  }
+  const docs = await mapWithConcurrency(docFiles, GITHUB_READ_CONCURRENCY, async (file) => {
+    try {
+      const content = await readGitHubFile(request, repo, branch, file.path);
+      return createDocRecord(file.path, content);
+    } catch {
+      return undefined;
+    }
+  });
 
-  return docs;
+  const readable = docs.filter((doc): doc is NonNullable<typeof doc> => doc !== undefined);
+  return { docs: readable, skipped: skipped + (docs.length - readable.length) };
 }
 
 async function readGitHubCommits(
@@ -246,13 +332,18 @@ function createGitHubRequester(options: GitHubInspectionOptions) {
     pathName: string,
     context: { repoUrl?: string } = {}
   ): Promise<T> {
-    const response = await fetchImpl(`https://api.github.com${pathName}`, {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "project-autopsy",
-        ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
-      }
-    });
+    const response = await fetchWithTimeout(
+      fetchImpl,
+      `https://api.github.com${pathName}`,
+      {
+        headers: {
+          accept: "application/vnd.github+json",
+          "user-agent": "project-autopsy",
+          ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
+        }
+      },
+      GITHUB_FETCH_TIMEOUT_MS
+    );
 
     if (!response.ok) {
       if (response.status === 404 && context.repoUrl) {
@@ -269,8 +360,4 @@ function createGitHubRequester(options: GitHubInspectionOptions) {
 
 function firstCommitLine(message: string): string {
   return message.split(/\r?\n/)[0]?.trim() ?? "";
-}
-
-function scoreDocPath(filePath: string): number {
-  return filePath.toLowerCase() === "readme.md" ? 0 : 1;
 }

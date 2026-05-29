@@ -65,7 +65,7 @@ No commit history was available for this inspection.
   Evidence: [EV-006]
 
 - **FINDING-006: Source code exists without a visible test surface** (high)
-  The repository has source files, but no test files were detected.
+  The repository has source files, but no test files or configured validation command were detected.
   Evidence: [EV-007]
 
 - **FINDING-007: Documented file is missing: docs/dashboard.png** (medium)

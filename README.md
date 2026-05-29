@@ -115,6 +115,18 @@ When GitHub redirects back to `/api/github-app/callback?installation_id=...`, Pr
 Set `PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET` in hosted mode so install redirects include a signed `state` value and callbacks without a valid state are rejected.
 Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views such as `/ops`. Authenticated requests can send `Authorization: Bearer <token>` or `x-project-autopsy-admin-token: <token>`.
 
+#### Hosted Source Policy And Limits
+
+A hosted web/API instance inspects **public github.com URLs only** by default. Local filesystem inspection (which can read arbitrary server paths) is disabled unless you explicitly opt in for local development:
+
+```powershell
+$env:PROJECT_AUTOPSY_ALLOW_LOCAL_PATHS="true"   # development only; never set on a public deployment
+```
+
+`POST /api/repositories/inspect` is rate limited per client (`PROJECT_AUTOPSY_INSPECT_RATE_LIMIT`, default `60` per window; `PROJECT_AUTOPSY_INSPECT_RATE_WINDOW_SECONDS`, default `60`; set the limit to `0` to disable). It can also require a token via `PROJECT_AUTOPSY_INSPECT_TOKEN`, sent as `Authorization: Bearer <token>` or `x-project-autopsy-inspect-token: <token>`.
+
+For absolute share links, set a trusted base URL with `PROJECT_AUTOPSY_PUBLIC_URL` (preferred), or allow-list proxy hosts with `PROJECT_AUTOPSY_ALLOWED_HOSTS` (comma-separated). When neither is configured, forwarded `Host`/`X-Forwarded-Host` headers are not trusted and share links fall back to relative paths.
+
 ### Dependency Freshness
 
 Registry checks are opt-in. They currently query npm, PyPI, and crates.io, then compare declared package ranges against each registry's latest published version.

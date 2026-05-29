@@ -3,6 +3,7 @@ import Link from "next/link";
 import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
 import { createWebRunStore } from "../lib/run-store";
 import { resolveGitHubToken } from "../lib/github-auth";
+import { assertSourceAllowed } from "../lib/source-policy";
 import { ReportView } from "./report-view";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +20,9 @@ interface ReportPageProps {
 
 export default async function ReportPage({ searchParams }: ReportPageProps) {
   const params = await searchParams;
-  const source = resolveSource(params);
+  const resolved = resolveSource(params);
 
-  if (!source) {
+  if (!resolved) {
     return (
       <main className="shell">
         <p className="eyebrow">Project Autopsy</p>
@@ -35,6 +36,13 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
   }
 
   try {
+    // Fixture demos resolve to a known local path server-side; any caller-
+    // supplied source must pass the hosted source policy (GitHub-only by default).
+    if (!resolved.trusted) {
+      assertSourceAllowed(resolved.source);
+    }
+
+    const source = resolved.source;
     const token = await resolveGitHubToken();
 
     if (params.save === "1") {
@@ -67,10 +75,16 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
   }
 }
 
-function resolveSource(params: { source?: string; demo?: string }) {
+function resolveSource(
+  params: { source?: string; demo?: string }
+): { source: string; trusted: boolean } | undefined {
   if (params.demo === "fixture") {
-    return path.resolve(process.cwd(), "../../fixtures/stalled-npm-app");
+    return { source: path.resolve(process.cwd(), "../../fixtures/stalled-npm-app"), trusted: true };
   }
 
-  return params.source;
+  if (params.source) {
+    return { source: params.source, trusted: false };
+  }
+
+  return undefined;
 }

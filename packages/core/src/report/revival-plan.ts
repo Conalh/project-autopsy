@@ -1,8 +1,10 @@
-import type { Finding, RevivalTask } from "../types.js";
+import type { Finding, ManifestRecord, RepoSnapshot, RevivalTask } from "../types.js";
 import { formatId } from "./evidence.js";
 
-export function createRevivalTasks(findings: Finding[]): RevivalTask[] {
+export function createRevivalTasks(findings: Finding[], snapshot: RepoSnapshot): RevivalTask[] {
   const tasks: Omit<RevivalTask, "id">[] = [];
+  const setupCommand = deriveSetupCommand(snapshot.manifests);
+  const validationCommand = deriveValidationCommand(snapshot.manifests);
 
   if (findings.some((finding) => finding.kind === "setup-risk")) {
     tasks.push({
@@ -11,7 +13,7 @@ export function createRevivalTasks(findings: Finding[]): RevivalTask[] {
       rationale: "Fix the setup and install risks before adding product behavior.",
       files: collectEvidencePaths(findings, "setup-risk"),
       evidenceIds: collectEvidenceIds(findings, "setup-risk"),
-      verificationCommand: "npm install && npm run build",
+      verificationCommand: setupCommand,
       expectedResult: "Dependencies install from a lockfile and the documented build command works.",
       priority: 1
     });
@@ -24,7 +26,7 @@ export function createRevivalTasks(findings: Finding[]): RevivalTask[] {
       rationale: "A revival needs one command that proves the current baseline.",
       files: collectEvidencePaths(findings, "validation-surface"),
       evidenceIds: collectEvidenceIds(findings, "validation-surface"),
-      verificationCommand: "npm test",
+      verificationCommand: validationCommand,
       expectedResult: "A repeatable test command exists and reports a clear result.",
       priority: 2
     });
@@ -77,4 +79,71 @@ function collectEvidenceIds(findings: Finding[], kind: string): string[] {
   return findings
     .filter((finding) => finding.kind === kind)
     .flatMap((finding) => finding.evidenceIds ?? []);
+}
+
+// Verification commands must match the actual ecosystem; a Python/Go/Rust repo
+// should never be told to run `npm test`.
+const ECOSYSTEM_PRIORITY: ManifestRecord["manager"][] = ["npm", "python", "rust", "go", "dotnet"];
+
+function selectPrimaryManager(manifests: ManifestRecord[]): ManifestRecord["manager"] | undefined {
+  const usable = manifests.filter((manifest) => !manifest.parseError);
+  const rootManagers = new Set(usable.filter((m) => !m.path.includes("/")).map((m) => m.manager));
+  const allManagers = new Set(usable.map((m) => m.manager));
+
+  return (
+    ECOSYSTEM_PRIORITY.find((manager) => rootManagers.has(manager)) ??
+    ECOSYSTEM_PRIORITY.find((manager) => allManagers.has(manager))
+  );
+}
+
+function findPrimaryManifest(
+  manifests: ManifestRecord[],
+  manager: ManifestRecord["manager"]
+): ManifestRecord | undefined {
+  const matching = manifests.filter((m) => m.manager === manager && !m.parseError);
+  return matching.find((m) => !m.path.includes("/")) ?? matching[0];
+}
+
+function deriveSetupCommand(manifests: ManifestRecord[]): string {
+  const manager = selectPrimaryManager(manifests);
+
+  switch (manager) {
+    case "npm": {
+      const manifest = findPrimaryManifest(manifests, "npm");
+      return manifest?.scripts.build ? "npm install && npm run build" : "npm install";
+    }
+    case "python": {
+      const manifest = findPrimaryManifest(manifests, "python");
+      return manifest?.path.toLowerCase().endsWith("requirements.txt")
+        ? "pip install -r requirements.txt"
+        : "pip install -e .";
+    }
+    case "rust":
+      return "cargo build";
+    case "go":
+      return "go build ./...";
+    case "dotnet":
+      return "dotnet build";
+    default:
+      return "Follow the README setup instructions to install dependencies and build.";
+  }
+}
+
+function deriveValidationCommand(manifests: ManifestRecord[]): string {
+  const manager = selectPrimaryManager(manifests);
+
+  switch (manager) {
+    case "npm":
+      return "npm test";
+    case "python":
+      return "pytest";
+    case "rust":
+      return "cargo test";
+    case "go":
+      return "go test ./...";
+    case "dotnet":
+      return "dotnet test";
+    default:
+      return "Run the project's documented test command.";
+  }
 }

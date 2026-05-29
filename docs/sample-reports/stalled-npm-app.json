@@ -90,14 +90,14 @@
     ],
     "docs": [
       {
-        "path": "docs/status.md",
-        "title": "Status",
-        "content": "# Status\n\nThe sync feature was planned but never started.\n"
-      },
-      {
         "path": "README.md",
         "title": "Stalled Notes App",
         "content": "# Stalled Notes App\n\nA small note-taking app for developers who want a local scratchpad beside their editor.\n\n## Setup\n\nRun `npm install` and then `npm run dev`.\n\nThe dashboard screenshot lives at `docs/dashboard.png`.\n"
+      },
+      {
+        "path": "docs/status.md",
+        "title": "Status",
+        "content": "# Status\n\nThe sync feature was planned but never started.\n"
       }
     ],
     "commits": [],
@@ -212,7 +212,7 @@
       "kind": "validation-surface",
       "severity": "high",
       "title": "Source code exists without a visible test surface",
-      "body": "The repository has source files, but no test files were detected.",
+      "body": "The repository has source files, but no test files or configured validation command were detected.",
       "evidence": [
         {
           "kind": "file",

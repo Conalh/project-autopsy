@@ -4,32 +4,25 @@ import path from "node:path";
 import { promisify } from "node:util";
 import type {
   CommitSummary,
+  DocRecord,
   FileRecord,
   ManifestRecord,
   RepoSnapshot
 } from "../types.js";
 import {
+  IGNORED_DIRECTORIES,
   classifyFile,
   createDocRecord,
-  detectManifestManager,
-  isDocPath,
   parseManifest,
+  selectDocTargets,
+  selectManifestTargets,
   summarizeLanguages,
   summarizeProject
 } from "./shared.js";
 
 const execFileAsync = promisify(execFile);
 
-const IGNORED_DIRS = new Set([
-  ".git",
-  ".next",
-  ".turbo",
-  "coverage",
-  "dist",
-  "node_modules",
-  "target",
-  "vendor"
-]);
+const IGNORED_DIRS = IGNORED_DIRECTORIES;
 
 export async function inspectLocalRepository(rootPath: string): Promise<RepoSnapshot> {
   const resolvedRoot = path.resolve(rootPath);
@@ -40,10 +33,17 @@ export async function inspectLocalRepository(rootPath: string): Promise<RepoSnap
 
   const files = await walkFiles(resolvedRoot);
   const manifests = await readManifests(resolvedRoot, files);
-  const docs = await readDocs(resolvedRoot, files);
+  const { docs, skipped } = await readDocs(resolvedRoot, files);
   const isGitRoot = await isGitRepositoryRoot(resolvedRoot);
   const commits = isGitRoot ? await readCommits(resolvedRoot) : [];
   const summary = summarizeProject(docs, manifests, path.basename(resolvedRoot));
+
+  const ingestionWarnings: string[] = [];
+  if (skipped > 0) {
+    ingestionWarnings.push(
+      `${skipped} documentation file(s) were skipped by size/count limits and were not analyzed.`
+    );
+  }
 
   return {
     sourceType: "local_path",
@@ -57,7 +57,8 @@ export async function inspectLocalRepository(rootPath: string): Promise<RepoSnap
     manifests,
     docs,
     commits,
-    summary
+    summary,
+    ...(ingestionWarnings.length > 0 ? { ingestionWarnings } : {})
   };
 }
 
@@ -110,30 +111,42 @@ async function walkFiles(rootPath: string): Promise<FileRecord[]> {
 async function readManifests(rootPath: string, files: FileRecord[]): Promise<ManifestRecord[]> {
   const manifests: ManifestRecord[] = [];
 
-  for (const file of files) {
-    const manager = detectManifestManager(file.path);
-    if (!manager) {
-      continue;
-    }
-
+  for (const { file, manager } of selectManifestTargets(files)) {
     const absolutePath = path.join(rootPath, file.path);
-    const content = await readFile(absolutePath, "utf8");
-    manifests.push(parseManifest(file.path, manager, content));
+    try {
+      const content = await readFile(absolutePath, "utf8");
+      manifests.push(parseManifest(file.path, manager, content));
+    } catch (error) {
+      manifests.push({
+        path: file.path,
+        manager,
+        parsed: {},
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+        parseError: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 
   return manifests;
 }
 
-async function readDocs(rootPath: string, files: FileRecord[]) {
-  const docFiles = files.filter((file) => file.kind === "docs" && isDocPath(file.path));
-  const docs = [];
+async function readDocs(rootPath: string, files: FileRecord[]): Promise<{ docs: DocRecord[]; skipped: number }> {
+  const { files: docFiles, skipped } = selectDocTargets(files);
+  const docs: DocRecord[] = [];
+  let unreadable = 0;
 
   for (const file of docFiles) {
-    const content = await readFile(path.join(rootPath, file.path), "utf8");
-    docs.push(createDocRecord(file.path, content));
+    try {
+      const content = await readFile(path.join(rootPath, file.path), "utf8");
+      docs.push(createDocRecord(file.path, content));
+    } catch {
+      unreadable += 1;
+    }
   }
 
-  return docs;
+  return { docs, skipped: skipped + unreadable };
 }
 
 async function readCommits(rootPath: string): Promise<CommitSummary[]> {

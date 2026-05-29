@@ -1,5 +1,6 @@
 import { detectDocsDrift } from "../detect/docs-drift.js";
 import { detectDependencyDrift } from "../detect/dependency-drift.js";
+import { detectIngestionIntegrity } from "../detect/ingestion-integrity.js";
 import { detectProjectIdentity } from "../detect/identity.js";
 import { detectMomentumBreak } from "../detect/momentum-break.js";
 import { detectSetupRisk } from "../detect/setup-risk.js";
@@ -35,7 +36,8 @@ export async function analyzeRepository(
     ...detectSetupRisk(snapshot),
     ...detectValidationSurface(snapshot),
     ...detectDocsDrift(snapshot),
-    ...(await detectDependencyDrift(snapshot, options))
+    ...(await detectDependencyDrift(snapshot, options)),
+    ...detectIngestionIntegrity(snapshot)
   ];
   const { findings, evidenceIndex } = assignEvidenceIds(rawFindings);
   const verdict = createVerdict(findings);
@@ -58,7 +60,7 @@ export async function analyzeRepository(
     snapshot,
     findings,
     stallHypotheses: createStallHypotheses(findings),
-    revivalTasks: createRevivalTasks(findings),
+    revivalTasks: createRevivalTasks(findings, snapshot),
     evidenceIndex
   };
 }

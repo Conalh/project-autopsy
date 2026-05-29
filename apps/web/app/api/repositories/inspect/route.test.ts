@@ -1,7 +1,7 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { POST } from "./route";
 import { clearAnalysisJobs, waitForAnalysisJob } from "../../../lib/analysis-queue";
 import { GET as getJob } from "../../jobs/[id]/route";
@@ -11,6 +11,16 @@ import { GET as exportMarkdown } from "../../runs/[id]/export.md/route";
 const fixturePath = path.resolve("../../fixtures/stalled-npm-app");
 
 describe("hosted API routes", () => {
+  // The local fixtures are filesystem paths, so these tests run as if in a
+  // development deployment with local inspection explicitly enabled.
+  beforeAll(() => {
+    process.env.PROJECT_AUTOPSY_ALLOW_LOCAL_PATHS = "true";
+  });
+
+  afterAll(() => {
+    delete process.env.PROJECT_AUTOPSY_ALLOW_LOCAL_PATHS;
+  });
+
   test("inspects a repository and returns the core report contract", async () => {
     const response = await POST(
       jsonRequest("http://localhost/api/repositories/inspect", {
@@ -93,6 +103,24 @@ describe("hosted API routes", () => {
     } finally {
       delete process.env.PROJECT_AUTOPSY_RUN_DB_PATH;
       clearAnalysisJobs();
+    }
+  });
+
+  test("rejects local filesystem paths when local inspection is disabled", async () => {
+    delete process.env.PROJECT_AUTOPSY_ALLOW_LOCAL_PATHS;
+
+    try {
+      const response = await POST(
+        jsonRequest("http://localhost/api/repositories/inspect", {
+          source: fixturePath
+        })
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(body.error).toContain("only inspects public github.com URLs");
+    } finally {
+      process.env.PROJECT_AUTOPSY_ALLOW_LOCAL_PATHS = "true";
     }
   });
 
