@@ -2,6 +2,8 @@
 
 **An evidence-backed autopsy report for stale software repositories.** Project Autopsy inspects a local path, public GitHub URL, or token-backed private GitHub repo, then turns the file tree, manifests, docs, commit history, and dependency signals into a structured diagnosis: score, verdict, findings, stall hypotheses, revival tasks, and source evidence.
 
+<!-- Live demo: after deploying (see DEPLOY.md), surface the URL here, e.g. **[▶ Live demo](https://project-autopsy.vercel.app)** -->
+
 > **Local-first demo path:** `npm install` -> `npm run build` -> `npm run inspect:fixture`. The fixture report is deterministic and committed under [`docs/sample-reports`](docs/sample-reports), so report drift is reviewable.
 
 ```mermaid
@@ -20,13 +22,31 @@ flowchart LR
 
 **See also:** [sample Markdown report](docs/sample-reports/stalled-npm-app.md), [sample JSON report](docs/sample-reports/stalled-npm-app.json), and [fixtures](fixtures).
 
+## Screenshots
+
+Paste a repo URL (or point at a local path), and get an evidence-backed report with a verdict, ranked findings, and a revival plan.
+
+| Inspector | Saved runs & score trend |
+| --- | --- |
+| [![Inspector — paste a repo URL and get a report](docs/screenshots/inspector.png)](docs/screenshots/inspector.png) | [![Saved runs with score-trend deltas](docs/screenshots/saved-runs.png)](docs/screenshots/saved-runs.png) |
+
+A full report — verdict and score, ranked findings with linked evidence, a phased revival plan with verification commands, and severity/dependency charts:
+
+[![Full autopsy report](docs/screenshots/report.png)](docs/screenshots/report.png)
+
+Compare two saved inspections to track drift between runs:
+
+[![Compare two saved runs, with score delta and finding-kind diffs](docs/screenshots/compare.png)](docs/screenshots/compare.png)
+
+> Screenshots are generated from the committed [`fixtures`](fixtures), so they reflect the deterministic sample report.
+
 ## Golden Demo
 
 ```powershell
 npm install
 npm run build
 npm run inspect:fixture
-node apps\cli\dist\index.js inspect fixtures\stalled-npm-app --format json --save
+node apps/cli/dist/index.js inspect fixtures\stalled-npm-app --format json --save
 npm run web:dev
 ```
 
@@ -46,6 +66,8 @@ Project Autopsy makes that state legible. It does not run arbitrary project comm
 
 ## Run It
 
+All commands run on macOS, Linux, and Windows. Examples use npm scripts and forward-slash paths (valid in PowerShell, bash, and zsh); where environment-variable or HTTP syntax genuinely differs between shells, both are shown.
+
 ### Install The Local CLI
 
 ```powershell
@@ -57,8 +79,8 @@ npm exec -- project-autopsy inspect fixtures/stalled-npm-app --format markdown
 The workspace exposes `project-autopsy` as a local npm bin after install. If you prefer not to use `npm exec`, call the built CLI directly:
 
 ```powershell
-node apps\cli\dist\index.js --help
-node apps\cli\dist\index.js inspect fixtures\stalled-npm-app --format markdown
+node apps/cli/dist/index.js --help
+node apps/cli/dist/index.js inspect fixtures/stalled-npm-app --format markdown
 ```
 
 ### Deterministic Fixture
@@ -79,24 +101,35 @@ npm run samples:check
 ### Local Repository
 
 ```powershell
-node apps\cli\dist\index.js inspect . --format markdown
-node apps\cli\dist\index.js inspect C:\path\to\old-repo --format json
+node apps/cli/dist/index.js inspect . --format markdown
+node apps/cli/dist/index.js inspect ../some-old-repo --format json
 ```
 
 ### GitHub Repository
 
 ```powershell
-node apps\cli\dist\index.js inspect https://github.com/octocat/Hello-World --format markdown
-node apps\cli\dist\index.js inspect https://github.com/owner/repo --branch main --format markdown
+node apps/cli/dist/index.js inspect https://github.com/octocat/Hello-World --format markdown
+node apps/cli/dist/index.js inspect https://github.com/owner/repo --branch main --format markdown
 ```
 
-Private repositories can be inspected with a token:
+Private repositories can be inspected with a token, passed directly:
+
+```bash
+node apps/cli/dist/index.js inspect https://github.com/owner/private-repo --github-token <token>
+```
+
+…or read from the environment:
 
 ```powershell
-node apps\cli\dist\index.js inspect https://github.com/owner/private-repo --github-token <token>
+# PowerShell
+$env:PROJECT_AUTOPSY_GITHUB_TOKEN = "<token>"
+node apps/cli/dist/index.js inspect https://github.com/owner/private-repo
+```
 
-$env:PROJECT_AUTOPSY_GITHUB_TOKEN="<token>"
-node apps\cli\dist\index.js inspect https://github.com/owner/private-repo
+```bash
+# bash / zsh
+export PROJECT_AUTOPSY_GITHUB_TOKEN=<token>
+node apps/cli/dist/index.js inspect https://github.com/owner/private-repo
 ```
 
 The web/API surface also supports GitHub App installation tokens through environment configuration. A personal access token takes precedence when both modes are configured:
@@ -132,7 +165,7 @@ For absolute share links, set a trusted base URL with `PROJECT_AUTOPSY_PUBLIC_UR
 Registry checks are opt-in. They currently query npm, PyPI, and crates.io, then compare declared package ranges against each registry's latest published version.
 
 ```powershell
-node apps\cli\dist\index.js inspect . --format markdown --check-registry
+node apps/cli/dist/index.js inspect . --format markdown --check-registry
 ```
 
 Registry failures become informational findings instead of blocking the report.
@@ -140,9 +173,9 @@ Registry failures become informational findings instead of blocking the report.
 ### Saved Runs
 
 ```powershell
-node apps\cli\dist\index.js inspect . --format json --save
-node apps\cli\dist\index.js runs
-node apps\cli\dist\index.js show <run_id> --format markdown
+node apps/cli/dist/index.js inspect . --format json --save
+node apps/cli/dist/index.js runs
+node apps/cli/dist/index.js show <run_id> --format markdown
 ```
 
 Saved runs live in `.project-autopsy/runs.sqlite` by default and are ignored by git.
@@ -161,11 +194,21 @@ Start the Next.js app:
 npm run web:dev
 ```
 
+To host it publicly, see [DEPLOY.md](DEPLOY.md) — hosted mode inspects public GitHub URLs only by default, so it is safe to deploy.
+
 The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check registry freshness, then open the report. Saved reports can be reopened, filtered, grouped, shared, compared, and exported from the web UI.
 
 The same report contract is exposed through local API routes:
 
+```bash
+# bash / zsh
+curl -s http://127.0.0.1:3000/api/repositories/inspect \
+  -H "content-type: application/json" \
+  -d '{"source":"https://github.com/owner/repo","save":true}'
+```
+
 ```powershell
+# PowerShell
 Invoke-RestMethod `
   -Method Post `
   -Uri http://127.0.0.1:3000/api/repositories/inspect `
@@ -292,28 +335,19 @@ The CLI package still depends on the local workspace core package during develop
 
 ## Status
 
-Project Autopsy is currently a local-first portfolio/devtool slice:
+Project Autopsy is a local-first portfolio/devtool slice. What works today:
 
-- Local and GitHub ingestion share one normalized snapshot pipeline.
-- Private GitHub repos work with a supplied token.
-- Reports export as Markdown and JSON.
-- CLI help and version flags are available through `--help`, `-h`, `--version`, and `-v`.
-- Saved run history is backed by local SQLite.
-- Hosted storage automatically uses Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured.
-- API inspections can run through a queue and be polled by job id; hosted mode persists job payload, state, result, errors, and retry attempts in Postgres.
-- External workers can process bounded job batches with completion/failure/requeue metrics and terminal-job cleanup.
-- Hosted schedulers can trigger bounded worker batches through `POST /api/worker/run`.
-- Operations dashboard shows queue storage mode, health alerts, job status counts, and recent analysis jobs.
-- Hosted operational views can require `PROJECT_AUTOPSY_ADMIN_TOKEN`.
-- Web and API routes reuse the same core package.
-- Web/API GitHub auth supports either a PAT or GitHub App installation token, with setup/status/install/callback endpoints.
-- Web UI includes saved-run browsing with filters/grouping, score trend visualization, shareable report URLs, saved-run comparisons, severity/finding/dependency charts, activity timeline, dependency focus, GitHub setup state, operations health, and report section navigation.
-- Core and CLI package dry-runs are CI-checked to keep source and test files out of installable tarballs.
-- Sample reports are committed and regression-checked.
+- **One core, three surfaces.** Local and GitHub ingestion feed a single normalized snapshot and `AutopsyReport`, consumed identically by the CLI, the Next.js web UI, and the API routes.
+- **Reports.** Score, verdict, evidence-linked findings, stall hypotheses, and a phased revival plan — exported as Markdown or JSON.
+- **Saved runs.** SQLite by default (Postgres in hosted mode), with browsing, filtering, score trends, share links, and pairwise comparison in the web UI.
+- **GitHub auth.** Public repos, or private repos via a personal access token or GitHub App installation token.
+- **Hosted ops.** Queued inspections with job polling, bounded external-worker batches, an operations dashboard, and admin-token-gated operational views.
+- **Hosted safety.** Public deployments inspect github.com URLs only by default; `/api/repositories/inspect` is rate-limited and supports an optional access token (see [Hosted Source Policy And Limits](#hosted-source-policy-and-limits)).
+- **Quality gates.** CI runs build, tests, coverage + badge drift, sample-report drift, and package-surface checks; sample reports are committed and regression-checked.
 
 Limits worth knowing:
 
-- Hosted API mode is still local-first by default; broader production auth is future work.
+- Hosted mode is GitHub-URL-only by default with per-client rate limiting; richer multi-tenant auth is future work.
 - Registry freshness is npm/PyPI/crates.io-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
