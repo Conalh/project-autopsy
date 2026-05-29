@@ -314,3 +314,7 @@ Limits worth knowing:
 3. Registry-backed drift checks for Go and .NET.
 4. Coverage threshold policy and package-level coverage notes.
 5. Broader production auth and deployment hardening.
+
+## License
+
+[MIT](LICENSE) &copy; 2026 Conal Hickey
