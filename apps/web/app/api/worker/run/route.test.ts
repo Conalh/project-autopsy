@@ -20,6 +20,26 @@ describe("worker run route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(body.error).toBe("Admin token required.");
+    expect(processAnalysisWorkerBatch).not.toHaveBeenCalled();
+  });
+
+  test("rejects an incorrect admin token", async () => {
+    process.env.PROJECT_AUTOPSY_ADMIN_TOKEN = "secret-admin-token";
+    const { POST } = await import("./route");
+
+    const response = await POST(
+      jsonRequest(
+        { maxJobs: 2 },
+        {
+          authorization: "Bearer wrong"
+        }
+      )
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
     expect(body.error).toBe("Admin token required.");
     expect(processAnalysisWorkerBatch).not.toHaveBeenCalled();
   });
@@ -50,6 +70,7 @@ describe("worker run route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(processAnalysisWorkerBatch).toHaveBeenCalledWith({
       maxJobs: 2,
       cleanupTerminalJobsOlderThan: "2026-05-27T00:00:00.000Z"

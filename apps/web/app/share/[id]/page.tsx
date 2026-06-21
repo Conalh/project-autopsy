@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { AccessRequired } from "../../lib/access-ui";
 import { createWebRunStore } from "../../lib/run-store";
+import { evaluateInspectAuth, inspectAuthFailureMessage } from "../../lib/source-policy";
 import { ReportView } from "../../report/report-view";
 import { buildShareLinks } from "../share-links";
 
@@ -13,6 +15,18 @@ interface SharedReportPageProps {
 }
 
 export default async function SharedReportPage({ params }: SharedReportPageProps) {
+  const requestHeaders = await headers();
+  const auth = evaluateInspectAuth(requestHeaders);
+  if (!auth.authorized) {
+    return (
+      <AccessRequired
+        title="Shared-report access required"
+        message={inspectAuthFailureMessage(auth)}
+        href="/runs"
+      />
+    );
+  }
+
   const { id } = await params;
   const saved = await (await createWebRunStore()).getRun(id);
 
@@ -29,7 +43,7 @@ export default async function SharedReportPage({ params }: SharedReportPageProps
     );
   }
 
-  const shareLinks = buildShareLinks(saved.id, await headers());
+  const shareLinks = buildShareLinks(saved.id, requestHeaders);
 
   return (
     <ReportView

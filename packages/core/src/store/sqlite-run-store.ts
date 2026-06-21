@@ -9,6 +9,9 @@ import type {
   SourceType,
   VerdictStatus
 } from "../types.js";
+import { createExternalAutopsyReport } from "../report/external.js";
+import { renderJsonReport } from "../report/json.js";
+import { renderMarkdownReport } from "../report/markdown.js";
 
 interface RunRow {
   id: string;
@@ -49,7 +52,10 @@ export function createSqliteRunStore(dbPath = defaultRunStorePath()): AnalysisRu
     saveRun(input) {
       const id = `run_${randomUUID()}`;
       const createdAt = new Date().toISOString();
-      const reportJson = JSON.stringify(input.report);
+      const report = createExternalAutopsyReport(input.report);
+      const markdown = renderMarkdownReport(report);
+      const json = renderJsonReport(report);
+      const reportJson = JSON.stringify(report);
 
       database
         .prepare(
@@ -68,26 +74,26 @@ export function createSqliteRunStore(dbPath = defaultRunStorePath()): AnalysisRu
         .run(
           id,
           input.source,
-          input.report.summary.sourceType,
-          input.report.summary.projectName,
-          input.report.verdict.score,
-          input.report.verdict.status,
+          report.summary.sourceType,
+          report.summary.projectName,
+          report.verdict.score,
+          report.verdict.status,
           createdAt,
           reportJson,
-          input.markdown
+          markdown
         );
 
       return {
         id,
         source: input.source,
-        sourceType: input.report.summary.sourceType,
-        projectName: input.report.summary.projectName,
-        score: input.report.verdict.score,
-        verdictStatus: input.report.verdict.status,
+        sourceType: report.summary.sourceType,
+        projectName: report.summary.projectName,
+        score: report.verdict.score,
+        verdictStatus: report.verdict.status,
         createdAt,
-        report: input.report,
-        markdown: input.markdown,
-        json: `${reportJson}\n`
+        report,
+        markdown,
+        json
       };
     },
 
@@ -133,11 +139,46 @@ export function createSqliteRunStore(dbPath = defaultRunStorePath()): AnalysisRu
         return undefined;
       }
 
+      const report = createExternalAutopsyReport(JSON.parse(row.report_json) as AutopsyReport);
+      const markdown = renderMarkdownReport(report);
+      const json = renderJsonReport(report);
+      const reportJson = JSON.stringify(report);
+
+      if (row.report_json !== reportJson || row.markdown !== markdown) {
+        database
+          .prepare(
+            `UPDATE analysis_runs
+            SET
+              source_type = ?,
+              project_name = ?,
+              score = ?,
+              verdict_status = ?,
+              report_json = ?,
+              markdown = ?
+            WHERE id = ?`
+          )
+          .run(
+            report.summary.sourceType,
+            report.summary.projectName,
+            report.verdict.score,
+            report.verdict.status,
+            reportJson,
+            markdown,
+            row.id
+          );
+      }
+
       return {
-        ...toSummary(row),
-        report: JSON.parse(row.report_json) as AutopsyReport,
-        markdown: row.markdown,
-        json: `${row.report_json}\n`
+        ...toSummary({
+          ...row,
+          source_type: report.summary.sourceType,
+          project_name: report.summary.projectName,
+          score: report.verdict.score,
+          verdict_status: report.verdict.status
+        }),
+        report,
+        markdown,
+        json
       };
     }
   };

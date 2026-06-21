@@ -1,15 +1,18 @@
-import { evaluateAdminAuth } from "../../../lib/admin-auth";
+import { adminAuthFailureMessage, adminAuthFailureStatus, evaluateAdminAuth } from "../../../lib/admin-auth";
 import { processAnalysisWorkerBatch } from "../../../lib/analysis-worker";
+import { jsonNoStoreResponse } from "../../../lib/http-cache";
 
 interface WorkerRunRequestBody {
   maxJobs?: unknown;
   cleanupTerminalJobsOlderThan?: unknown;
 }
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request): Promise<Response> {
   const adminAuth = evaluateAdminAuth(request.headers);
   if (!adminAuth.authorized) {
-    return jsonResponse({ error: "Admin token required." }, 401);
+    return jsonResponse({ error: adminAuthFailureMessage(adminAuth) }, adminAuthFailureStatus(adminAuth));
   }
 
   let body: WorkerRunRequestBody = {};
@@ -43,5 +46,5 @@ function readPositiveInteger(value: unknown): number | undefined {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return Response.json(body, { status });
+  return jsonNoStoreResponse(body, { status });
 }

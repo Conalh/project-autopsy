@@ -145,8 +145,8 @@ $env:PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH="C:\path\to\github-app-private-
 Inline private keys are supported with `PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY`; escaped `\n` sequences are normalized before signing.
 If your app install URL does not follow the standard slug format, set `PROJECT_AUTOPSY_GITHUB_APP_INSTALL_URL`.
 When GitHub redirects back to `/api/github-app/callback?installation_id=...`, Project Autopsy stores that installation id in `.project-autopsy/github-app-installation.json` by default, or in Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured. Override the local store path with `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH`; an explicit `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID` still wins.
-Set `PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET` in hosted mode so install redirects include a signed `state` value and callbacks without a valid state are rejected.
-Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views such as `/ops`. Authenticated requests can send `Authorization: Bearer <token>` or `x-project-autopsy-admin-token: <token>`.
+Set `PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET` before using GitHub App install callbacks in hosted or private-capable deployments; callbacks without a valid signed `state` are rejected.
+Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views, worker triggers, and GitHub App setup/status routes. Authenticated requests can send `Authorization: Bearer <token>` or `x-project-autopsy-admin-token: <token>`.
 
 #### Hosted Source Policy And Limits
 
@@ -156,7 +156,11 @@ A hosted web/API instance inspects **public github.com URLs only** by default. L
 $env:PROJECT_AUTOPSY_ALLOW_LOCAL_PATHS="true"   # development only; never set on a public deployment
 ```
 
-`POST /api/repositories/inspect` is rate limited per client (`PROJECT_AUTOPSY_INSPECT_RATE_LIMIT`, default `60` per window; `PROJECT_AUTOPSY_INSPECT_RATE_WINDOW_SECONDS`, default `60`; set the limit to `0` to disable). It can also require a token via `PROJECT_AUTOPSY_INSPECT_TOKEN`, sent as `Authorization: Bearer <token>` or `x-project-autopsy-inspect-token: <token>`.
+`/report` and `POST /api/repositories/inspect` are rate limited per client (`PROJECT_AUTOPSY_INSPECT_RATE_LIMIT`, default `60` per window; `PROJECT_AUTOPSY_INSPECT_RATE_WINDOW_SECONDS`, default `60`; set the limit to `0` to disable). In production, and whenever private GitHub credentials are configured, inspection and saved-run access require `PROJECT_AUTOPSY_INSPECT_TOKEN`, sent as `Authorization: Bearer <token>` or `x-project-autopsy-inspect-token: <token>`. Browser deployments should usually sit behind an auth proxy that injects this header.
+
+Saved-run pages, share pages, comparison pages, saved-run APIs, and job polling use the same inspect-token gate when hosted access is protected. Sensitive pages and APIs send `Cache-Control: private, no-store`.
+
+Hosted access is an interim single-tenant perimeter that relies on trusted proxy-injected credentials. It does not yet provide per-user ownership, selective sharing, grant revocation, or tenant isolation.
 
 For absolute share links, set a trusted base URL with `PROJECT_AUTOPSY_PUBLIC_URL` (preferred), or allow-list proxy hosts with `PROJECT_AUTOPSY_ALLOWED_HOSTS` (comma-separated). When neither is configured, forwarded `Host`/`X-Forwarded-Host` headers are not trusted and share links fall back to relative paths.
 
@@ -183,7 +187,7 @@ Saved runs live in `.project-autopsy/runs.sqlite` by default and are ignored by 
 The web saved-runs page adds filtering, project/source grouping, score trend visualization, share links, and pairwise comparisons.
 
 Hosted web/API runs can use Postgres by setting `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL`. When neither is present, the web surface falls back to SQLite. `PROJECT_AUTOPSY_RUN_DB_PATH` can override the local SQLite path.
-Queued hosted jobs persist payload, status, result, error, and retry attempts in Postgres. Set `PROJECT_AUTOPSY_ANALYSIS_JOB_MAX_ATTEMPTS` to retry transient queued-analysis failures before a job is marked failed. Set `PROJECT_AUTOPSY_ANALYSIS_QUEUE_MODE=external` when a separate worker process will claim and process queued jobs through `processNextAnalysisJob`.
+Queued hosted jobs persist payload, status, result, error, and retry attempts in Postgres. Stored job payloads/results/errors are redacted for token-shaped fields, and report-shaped results are minimized before storage. Set `PROJECT_AUTOPSY_ANALYSIS_JOB_MAX_ATTEMPTS` to retry transient queued-analysis failures before a job is marked failed. Set `PROJECT_AUTOPSY_ANALYSIS_QUEUE_MODE=external` when a separate worker process will claim and process queued jobs through `processNextAnalysisJob`.
 Schedulers can trigger bounded external-worker batches through `POST /api/worker/run` with an optional JSON body such as `{ "maxJobs": 5, "cleanupTerminalJobsOlderThan": "2026-05-20T00:00:00.000Z" }`.
 
 ## Web And API
@@ -194,7 +198,7 @@ Start the Next.js app:
 npm run web:dev
 ```
 
-To host it publicly, see [DEPLOY.md](DEPLOY.md) — hosted mode inspects public GitHub URLs only by default, so it is safe to deploy.
+To host it publicly, see [DEPLOY.md](DEPLOY.md). Production and private-credential deployments must be placed behind the inspect/admin token gates before exposing the web surface.
 
 The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check registry freshness, then open the report. Saved reports can be reopened, filtered, grouped, shared, compared, and exported from the web UI.
 
@@ -220,15 +224,15 @@ Invoke-RestMethod `
 | --- | --- |
 | `POST /api/repositories/inspect` | Inspect a local path or GitHub URL and return `{ report }` or `{ run, report }` |
 | `POST /api/repositories/inspect` with `{ "queue": true }` | Queue an inspection and return `{ job }` with HTTP `202` |
-| `GET /api/github-app/status` | Show PAT/GitHub App setup state and missing env fields |
-| `GET /api/github-app/install` | Redirect to the configured GitHub App installation URL |
-| `GET /api/github-app/callback` | Persist the GitHub App `installation_id` callback for future API auth |
-| `GET /api/jobs/{id}` | Poll an in-process queued inspection job |
-| `POST /api/worker/run` | Run a bounded external worker batch for scheduler-triggered hosted processing |
-| `GET /ops` | View queue storage mode, health alerts, job status counts, and recent analysis jobs; guarded by `PROJECT_AUTOPSY_ADMIN_TOKEN` when configured |
-| `GET /api/runs/{id}` | Load a saved run as JSON |
-| `GET /api/runs/{id}/export.md` | Load a saved run as Markdown |
-| `GET /share/{id}` | Open a read-only share view for a saved run |
+| `GET /api/github-app/status` | Show PAT/GitHub App setup state and missing env fields; admin-token gated in hosted/private-capable deployments |
+| `GET /api/github-app/install` | Redirect to the configured GitHub App installation URL with signed callback state; admin-token gated in hosted/private-capable deployments |
+| `GET /api/github-app/callback` | Persist the GitHub App `installation_id` callback for future API auth; signed callback state is required in hosted/private-capable deployments |
+| `GET /api/jobs/{id}` | Poll an in-process queued inspection job; inspect-token gated in hosted/private-capable deployments |
+| `POST /api/worker/run` | Run a bounded external worker batch for scheduler-triggered hosted processing; admin-token gated in hosted/private-capable deployments |
+| `GET /ops` | View queue storage mode, health alerts, job status counts, and recent analysis jobs; admin-token gated in hosted/private-capable deployments |
+| `GET /api/runs/{id}` | Load a saved run as JSON; inspect-token gated in hosted/private-capable deployments |
+| `GET /api/runs/{id}/export.md` | Load a saved run as Markdown; inspect-token gated in hosted/private-capable deployments |
+| `GET /share/{id}` | Open a read-only share view for a saved run; inspect-token gated in hosted/private-capable deployments |
 | `GET /compare?left={run_id}&right={run_id}` | Compare two saved runs by score, files, tasks, severity counts, and finding kinds |
 
 ## What The Report Contains
@@ -265,7 +269,7 @@ Invoke-RestMethod `
 - [EV-003] README.md - npm run dev
 ```
 
-The real report also includes a project snapshot, dependency snapshot, ranked stall hypotheses, evidence IDs, expected outcomes, and verification commands. Markdown exports include a recent activity timeline and dependency focus rollup so handoff readers can scan momentum and package surface before diving into raw findings.
+The real report also includes a minimized project snapshot, dependency snapshot, ranked stall hypotheses, evidence IDs, expected outcomes, and verification commands. Markdown exports include a recent activity timeline and dependency focus rollup so handoff readers can scan momentum and package surface before diving into raw findings. Saved-run storage strips raw file lists, document bodies, parsed manifest bodies, commit authors, and commit messages; legacy saved rows are sanitized and rewritten when read.
 
 ## Analysis Model
 
@@ -341,13 +345,14 @@ Project Autopsy is a local-first portfolio/devtool slice. What works today:
 - **Reports.** Score, verdict, evidence-linked findings, stall hypotheses, and a phased revival plan — exported as Markdown or JSON.
 - **Saved runs.** SQLite by default (Postgres in hosted mode), with browsing, filtering, score trends, share links, and pairwise comparison in the web UI.
 - **GitHub auth.** Public repos, or private repos via a personal access token or GitHub App installation token.
-- **Hosted ops.** Queued inspections with job polling, bounded external-worker batches, an operations dashboard, and admin-token-gated operational views.
-- **Hosted safety.** Public deployments inspect github.com URLs only by default; `/api/repositories/inspect` is rate-limited and supports an optional access token (see [Hosted Source Policy And Limits](#hosted-source-policy-and-limits)).
+- **Hosted ops.** Queued inspections with inspect-token-gated job polling, bounded admin-token-gated external-worker batches, and an admin-token-gated operations dashboard.
+- **Hosted safety.** Public deployments reject local paths by default; production/private-credential deployments require inspect/admin token gates, and web/API reports are minimized before they are returned or persisted (see [Hosted Source Policy And Limits](#hosted-source-policy-and-limits)).
 - **Quality gates.** CI runs build, tests, coverage + badge drift, sample-report drift, and package-surface checks; sample reports are committed and regression-checked.
 
 Limits worth knowing:
 
 - Hosted mode is GitHub-URL-only by default with per-client rate limiting; richer multi-tenant auth is future work.
+- Dependency audit status is **no high-severity audit findings**. The remaining moderate `GHSA-qx2v-qp2m-jg93` finding is `next -> postcss` (`postcss <8.5.10`; npm reports affected `next` versions `9.3.4-canary.0 - 16.3.0-canary.5`). The app does not accept or stringify attacker-supplied CSS in routes; upgrade Next.js when a patched release carries a non-vulnerable PostCSS rather than downgrading to obsolete Next versions.
 - Registry freshness is npm/PyPI/crates.io-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
