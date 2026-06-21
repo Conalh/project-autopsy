@@ -14,6 +14,14 @@ This repo is reviveable, but 2 high-severity issue(s) should be handled before f
 - Latest commit: No commit history found
 - Technologies: next, npm, typescript
 
+## Inspection Completeness
+
+- Files: complete; read=4; discovered=4; skipped=0
+- Manifests: complete; read=1; discovered=1; skipped=0
+- Documentation: complete; read=2; discovered=2; skipped=0
+- Commits: complete; read=0; discovered=0; skipped=0; reasons=not-a-git-root
+- Runtime: complete; elapsedMs=0; limitMs=60000
+
 ## Activity Timeline
 
 No commit history was available for this inspection.

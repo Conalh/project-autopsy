@@ -1,4 +1,9 @@
 import type { Finding, ManifestRecord, RepoSnapshot } from "../types.js";
+import {
+  formatCompletenessReasons,
+  hasPartialFileInventory,
+  hasPartialManifestInventory
+} from "./uncertainty.js";
 
 const TEST_RUNNER_PATTERN =
   /\b(vitest|jest|mocha|jasmine|ava|tap|playwright|cypress|karma|pytest|tox|nox|nptest|node --test|node:test)\b/i;
@@ -29,6 +34,25 @@ export function detectValidationSurface(snapshot: RepoSnapshot): Finding[] {
   // high-severity alarm, look for configured validation (test scripts, CI jobs,
   // or ecosystems with a built-in test runner) that we simply can't see as files.
   const signals = collectValidationSignals(snapshot);
+  const partialInput = hasPartialFileInventory(snapshot) || hasPartialManifestInventory(snapshot);
+  if (partialInput) {
+    return [
+      {
+        kind: "validation-surface",
+        severity: "medium",
+        title: "Validation surface is provisional because input was incomplete",
+        body: `Source files were visible, but the analyzer cannot make a definitive missing-test conclusion because relevant input was truncated or skipped (${formatCompletenessReasons(snapshot)}).`,
+        evidence: [
+          {
+            kind: "file",
+            path: sourceFiles[0]?.path,
+            excerpt: `${sourceFiles.length} source file(s), 0 visible test files; conclusion provisional`
+          }
+        ]
+      }
+    ];
+  }
+
   if (signals.length > 0) {
     return [
       {

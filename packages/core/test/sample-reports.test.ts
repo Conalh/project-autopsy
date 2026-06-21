@@ -12,6 +12,7 @@ describe("sample reports", () => {
     const report = await analyzeRepository(fixturePath);
     report.metadata.generatedAt = stableGeneratedAt;
     report.snapshot.rootPath = "fixtures/stalled-npm-app";
+    report.snapshot.completeness.runtime.elapsedMs = 0;
 
     await expect(readSample("stalled-npm-app.md")).resolves.toBe(renderMarkdownReport(report));
     await expect(readSample("stalled-npm-app.json")).resolves.toBe(renderJsonReport(report));

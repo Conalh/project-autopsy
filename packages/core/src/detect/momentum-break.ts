@@ -1,8 +1,26 @@
 import type { Finding, RepoSnapshot } from "../types.js";
+import { formatCompletenessReasons, hasPartialCommits } from "./uncertainty.js";
 
 export function detectMomentumBreak(snapshot: RepoSnapshot): Finding[] {
   const latestCommit = snapshot.commits[0];
   if (!latestCommit) {
+    if (hasPartialCommits(snapshot)) {
+      return [
+        {
+          kind: "momentum-break",
+          severity: "info",
+          title: "Commit history was not fully inspected",
+          body: `The analyzer could not make a definitive momentum conclusion because commit ingestion was incomplete (${formatCompletenessReasons(snapshot)}).`,
+          evidence: [
+            {
+              kind: "commit",
+              excerpt: "commit ingestion did not complete"
+            }
+          ]
+        }
+      ];
+    }
+
     return [
       {
         kind: "momentum-break",

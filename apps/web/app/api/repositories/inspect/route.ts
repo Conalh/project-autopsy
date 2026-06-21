@@ -1,5 +1,6 @@
 import { enqueueWebAnalysisJob } from "../../../lib/analysis-queue";
 import { resolveGitHubToken } from "../../../lib/github-auth";
+import { jsonNoStoreResponse } from "../../../lib/http-cache";
 import {
   clientKeyFromHeaders,
   createInspectRateLimiter
@@ -7,6 +8,9 @@ import {
 import {
   assertSourceAllowed,
   evaluateInspectAuth,
+  inspectAuthFailureMessage,
+  inspectAuthFailureStatus,
+  readHostedInspectionBudgets,
   SourceNotAllowedError
 } from "../../../lib/source-policy";
 import {
@@ -22,19 +26,25 @@ interface InspectRequestBody {
   queue?: unknown;
 }
 
+export const dynamic = "force-dynamic";
+
 const rateLimiter = createInspectRateLimiter();
 
 export async function POST(request: Request): Promise<Response> {
   const auth = evaluateInspectAuth(request.headers);
-  if (auth.configured && !auth.authorized) {
-    return jsonResponse({ error: "Unauthorized." }, 401);
+  if (!auth.authorized) {
+    return jsonResponse({ error: inspectAuthFailureMessage(auth) }, inspectAuthFailureStatus(auth));
   }
 
   const rate = rateLimiter.check(clientKeyFromHeaders(request.headers));
   if (!rate.allowed) {
     return new Response(JSON.stringify({ error: "Too many inspection requests. Try again shortly." }), {
       status: 429,
-      headers: { "content-type": "application/json", "retry-after": String(rate.retryAfterSeconds) }
+      headers: {
+        "cache-control": "private, no-store",
+        "content-type": "application/json",
+        "retry-after": String(rate.retryAfterSeconds)
+      }
     });
   }
 
@@ -56,7 +66,8 @@ export async function POST(request: Request): Promise<Response> {
     const options = {
       branch: typeof body.branch === "string" && body.branch.trim().length > 0 ? body.branch : undefined,
       checkDependencyRegistry: body.checkRegistry === true,
-      token: await resolveGitHubToken()
+      token: await resolveGitHubToken(),
+      budgets: readHostedInspectionBudgets()
     };
 
     if (body.queue === true) {
@@ -64,7 +75,8 @@ export async function POST(request: Request): Promise<Response> {
         source: body.source,
         save: body.save === true,
         branch: options.branch,
-        checkDependencyRegistry: options.checkDependencyRegistry
+        checkDependencyRegistry: options.checkDependencyRegistry,
+        budgets: options.budgets
       });
       const job = await enqueueWebAnalysisJob(() => inspectRepository(body.source as string, body.save === true, options), {
         payload,
@@ -83,7 +95,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return Response.json(body, { status });
+  return jsonNoStoreResponse(body, { status });
 }
 
 function readEnv(name: string): string | undefined {

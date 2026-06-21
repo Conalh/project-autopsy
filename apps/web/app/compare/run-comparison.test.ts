@@ -12,7 +12,8 @@ describe("run comparison", () => {
       fileCount: 4,
       taskCount: 2,
       findingCounts: { high: 1, medium: 1, low: 0, info: 0 },
-      findingKinds: ["setup-risk", "dependency-drift"]
+      findingKinds: ["setup-risk", "dependency-drift"],
+      limitationReasons: ["github-tree-truncated"]
     });
     const right = createRun({
       id: "run_new",
@@ -29,14 +30,18 @@ describe("run comparison", () => {
         projectName: "Fixture run_old",
         createdAt: "2026-05-20T00:00:00.000Z",
         score: 42,
-        verdictStatus: "needs-cleanup"
+        verdictStatus: "needs-cleanup",
+        analysisStatus: "partial",
+        limitationReasons: ["github-tree-truncated"]
       },
       right: {
         id: "run_new",
         projectName: "Fixture run_new",
         createdAt: "2026-05-21T00:00:00.000Z",
         score: 68,
-        verdictStatus: "needs-cleanup"
+        verdictStatus: "needs-cleanup",
+        analysisStatus: "complete",
+        limitationReasons: []
       },
       scoreDelta: 26,
       fileDelta: 1,
@@ -64,7 +69,8 @@ function createRun({
   fileCount,
   taskCount,
   findingCounts,
-  findingKinds
+  findingKinds,
+  limitationReasons = []
 }: {
   id: string;
   score: number;
@@ -72,6 +78,7 @@ function createRun({
   taskCount: number;
   findingCounts: FindingCounts;
   findingKinds: string[];
+  limitationReasons?: string[];
 }): SavedAnalysisRun {
   const report: AutopsyReport = {
     metadata: {
@@ -105,6 +112,19 @@ function createRun({
       summary: {
         projectName: `Fixture ${id}`,
         technologies: ["npm"]
+      },
+      completeness: {
+        files: {
+          status: limitationReasons.length > 0 ? "partial" : "complete",
+          discovered: fileCount,
+          included: fileCount,
+          skipped: limitationReasons.length,
+          reasons: limitationReasons
+        },
+        manifests: { status: "complete", discovered: 0, read: 0, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+        docs: { status: "complete", discovered: 0, read: 0, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+        commits: { status: "complete", requested: 0, read: 0, skipped: 0, reasons: [] },
+        runtime: { status: "complete", elapsedMs: 0, limitMs: 60000, timedOut: false, reasons: [] }
       }
     },
     findings: findingKinds.map((kind, index): Finding => {

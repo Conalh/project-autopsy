@@ -15,9 +15,12 @@ export function renderMarkdownReport(report: AutopsyReport): string {
     "",
     `- Source: ${report.snapshot.sourceType}`,
     `- Files inspected: ${report.snapshot.fileCount}`,
-    `- Latest commit: ${report.snapshot.commits[0]?.message ?? "No commit history found"}`,
+    `- Latest commit: ${report.snapshot.commits[0]?.message || "No commit history found"}`,
     `- Technologies: ${report.snapshot.summary.technologies.join(", ") || "Unknown"}`,
     "",
+    "## Inspection Completeness",
+    "",
+    ...formatInspectionCompleteness(report),
     "## Activity Timeline",
     "",
     ...formatActivityTimeline(report),
@@ -40,6 +43,43 @@ export function renderMarkdownReport(report: AutopsyReport): string {
   ];
 
   return `${lines.join("\n").trim()}\n`;
+}
+
+function formatInspectionCompleteness(report: AutopsyReport): string[] {
+  const { completeness } = report.snapshot;
+  const lines = [
+    `- Files: ${formatCompletenessLine(completeness.files.status, completeness.files.included, completeness.files.discovered, completeness.files.skipped, completeness.files.reasons)}`,
+    `- Manifests: ${formatCompletenessLine(completeness.manifests.status, completeness.manifests.read, completeness.manifests.discovered, completeness.manifests.skipped + completeness.manifests.failed, completeness.manifests.reasons)}`,
+    `- Documentation: ${formatCompletenessLine(completeness.docs.status, completeness.docs.read, completeness.docs.discovered, completeness.docs.skipped + completeness.docs.failed, completeness.docs.reasons)}`,
+    `- Commits: ${formatCompletenessLine(completeness.commits.status, completeness.commits.read, completeness.commits.requested, completeness.commits.skipped, completeness.commits.reasons)}`
+  ];
+
+  if (completeness.http) {
+    lines.push(
+      `- GitHub API: ${completeness.http.status}; requests=${completeness.http.requestsMade}; failures=${completeness.http.failures}; oversized=${completeness.http.responsesTooLarge}; exhausted=${completeness.http.limitReached}${formatReasons(completeness.http.reasons)}`
+    );
+  }
+
+  lines.push(
+    `- Runtime: ${completeness.runtime.status}; elapsedMs=${completeness.runtime.elapsedMs}; limitMs=${completeness.runtime.limitMs}${formatReasons(completeness.runtime.reasons)}`,
+    ""
+  );
+
+  return lines;
+}
+
+function formatCompletenessLine(
+  status: string,
+  read: number,
+  discovered: number,
+  skipped: number,
+  reasons: string[]
+): string {
+  return `${status}; read=${read}; discovered=${discovered}; skipped=${skipped}${formatReasons(reasons)}`;
+}
+
+function formatReasons(reasons: string[]): string {
+  return reasons.length > 0 ? `; reasons=${reasons.join(", ")}` : "";
 }
 
 function formatReportTitle(projectName: string): string {

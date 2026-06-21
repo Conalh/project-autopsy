@@ -2,9 +2,22 @@ import path from "node:path";
 import type {
   CommitSummary,
   FileRecord,
+  InspectionBudgetOverrides,
+  InspectionBudgets,
+  IngestionCompleteness,
+  ManifestCompleteness,
   ManifestRecord,
+  HttpCompleteness,
   RepoSnapshot
 } from "../types.js";
+import {
+  completenessStatus,
+  createInspectionBudgetContext,
+  getRemainingRuntimeMs,
+  isRuntimeExpired,
+  type InspectionBudgetContext,
+  uniqueReasons
+} from "./budgets.js";
 import {
   classifyFile,
   createDocRecord,
@@ -15,9 +28,6 @@ import {
   summarizeProject
 } from "./shared.js";
 import { fetchWithTimeout, mapWithConcurrency } from "../util/async.js";
-
-const GITHUB_READ_CONCURRENCY = 6;
-const GITHUB_FETCH_TIMEOUT_MS = 15000;
 
 export interface GitHubRepositoryInput {
   url: string;
@@ -39,6 +49,8 @@ export interface GitHubInspectionOptions {
   npmRegistryFetch?: typeof fetch;
   pypiRegistryFetch?: typeof fetch;
   cratesRegistryFetch?: typeof fetch;
+  budgets?: InspectionBudgetOverrides;
+  budgetContext?: InspectionBudgetContext;
 }
 
 interface GitHubRepoResponse {
@@ -91,6 +103,29 @@ interface ResolvedBranch {
   branch: string;
   /** A commit sha to fetch the tree with when the ref contained a slash. */
   treeRef: string;
+  branchDiscoveryComplete: boolean;
+  branchDiscoveryReason?: string;
+}
+
+interface GitHubRequester {
+  request<T>(pathName: string, context?: { repoUrl?: string }): Promise<T>;
+  http: HttpCompleteness;
+}
+
+interface GitHubFileInventory {
+  files: FileRecord[];
+  completeness: IngestionCompleteness["files"];
+}
+
+interface ManifestReadResult {
+  manifests: ManifestRecord[];
+  completeness: ManifestCompleteness;
+}
+
+interface GitHubPageResult<T> {
+  values: T[];
+  complete: boolean;
+  reason?: string;
 }
 
 export function parseGitHubUrl(value: string): ParsedGitHubUrl {
@@ -145,47 +180,61 @@ export async function inspectGitHubRepository(
   input: GitHubRepositoryInput,
   options: GitHubInspectionOptions = {}
 ): Promise<RepoSnapshot> {
+  const budgetContext = options.budgetContext ?? createInspectionBudgetContext(options.budgets);
+  const { budgets, startedAt } = budgetContext;
   const parsed = parseGitHubUrl(input.url);
-  const request = createGitHubRequester(options);
-  const repo = await request<GitHubRepoResponse>(`/repos/${parsed.owner}/${parsed.repo}`, {
+  const requester = createGitHubRequester(options, budgetContext);
+  const repo = await requester.request<GitHubRepoResponse>(`/repos/${parsed.owner}/${parsed.repo}`, {
     repoUrl: parsed.url
   });
-  const { branch, treeRef } = await resolveBranch(
-    request,
+  const { branch, treeRef, branchDiscoveryComplete, branchDiscoveryReason } = await resolveBranch(
+    requester.request,
     parsed,
     input.branch ?? parsed.branch,
-    repo.default_branch
+    repo.default_branch,
+    budgets
   );
-  const tree = await request<GitHubTreeResponse>(
+  const tree = await requester.request<GitHubTreeResponse>(
     `/repos/${parsed.owner}/${parsed.repo}/git/trees/${encodeURIComponent(treeRef)}?recursive=1`
   );
 
-  const ingestionWarnings: string[] = [];
-  if (tree.truncated) {
-    ingestionWarnings.push(
-      "GitHub returned a truncated file tree for this repository, so the report is built from an incomplete file list. Missing-file, missing-test, and dependency conclusions may be wrong."
-    );
-  }
+  const inventory = buildGitHubFileInventory(
+    tree,
+    budgets,
+    branchDiscoveryComplete ? [] : [branchDiscoveryReason ?? "github-branch-discovery-incomplete"]
+  );
+  const files = inventory.files;
 
-  const files = tree.tree
-    .filter((item) => item.type === "blob")
-    .map<FileRecord>((item) => ({
-      path: item.path,
-      extension: path.extname(item.path).toLowerCase(),
-      sizeBytes: item.size ?? 0,
-      kind: classifyFile(item.path)
-    }))
-    .sort((left, right) => left.path.localeCompare(right.path));
-
-  const manifests = await readGitHubManifests(request, parsed, treeRef, files);
-  const { docs, skipped } = await readGitHubDocs(request, parsed, treeRef, files);
-  if (skipped > 0) {
-    ingestionWarnings.push(
-      `${skipped} documentation file(s) were skipped by size/count limits and were not analyzed.`
-    );
-  }
-  const commits = await readGitHubCommits(request, parsed, treeRef);
+  const manifestResult = await readGitHubManifests(requester.request, parsed, treeRef, files, budgets);
+  const manifests = manifestResult.manifests;
+  const docResult = await readGitHubDocs(requester.request, parsed, treeRef, files, budgets);
+  const docs = docResult.docs;
+  const commitResult = await readGitHubCommits(requester.request, parsed, treeRef, budgets.maxCommits);
+  const commits = commitResult.commits;
   const summary = summarizeProject(docs, manifests, repo.name);
+  const elapsedMs = Date.now() - startedAt;
+  const runtimeTimedOut = isRuntimeExpired(budgetContext);
+  const completeness: IngestionCompleteness = {
+    files: inventory.completeness,
+    manifests: manifestResult.completeness,
+    docs: docResult.completeness,
+    commits: {
+      status: completenessStatus(commitResult.skipped, commitResult.reasons),
+      requested: budgets.maxCommits,
+      read: commits.length,
+      skipped: commitResult.skipped,
+      reasons: commitResult.reasons
+    },
+    http: requester.http,
+    runtime: {
+      status: runtimeTimedOut ? "partial" : "complete",
+      elapsedMs,
+      limitMs: budgets.maxRuntimeMs,
+      timedOut: runtimeTimedOut,
+      reasons: runtimeTimedOut ? ["runtime-limit"] : []
+    }
+  };
+  const ingestionWarnings = createIngestionWarnings(completeness);
 
   return {
     sourceType: "github_url",
@@ -203,6 +252,7 @@ export async function inspectGitHubRepository(
     docs,
     commits,
     summary,
+    completeness,
     ...(ingestionWarnings.length > 0 ? { ingestionWarnings } : {})
   };
 }
@@ -217,45 +267,140 @@ async function resolveBranch(
   request: <T>(pathName: string) => Promise<T>,
   repo: ParsedGitHubUrl,
   candidate: string | undefined,
-  defaultBranch: string
+  defaultBranch: string,
+  budgets: InspectionBudgets
 ): Promise<ResolvedBranch> {
   const ref = candidate ?? defaultBranch;
   if (!ref.includes("/")) {
-    return { branch: ref, treeRef: ref };
+    return { branch: ref, treeRef: ref, branchDiscoveryComplete: true };
   }
 
   try {
-    const branches = await request<GitHubBranchResponse[]>(
-      `/repos/${repo.owner}/${repo.repo}/branches?per_page=100`
+    const branchPages = await readGitHubPages<GitHubBranchResponse>(
+      request,
+      `/repos/${repo.owner}/${repo.repo}/branches`,
+      budgets
     );
-    const match = branches
+    const match = branchPages.values
       .filter((entry) => ref === entry.name || ref.startsWith(`${entry.name}/`))
       .sort((left, right) => right.name.length - left.name.length)[0];
 
     if (match?.commit?.sha) {
-      return { branch: match.name, treeRef: match.commit.sha };
+      return { branch: match.name, treeRef: match.commit.sha, branchDiscoveryComplete: branchPages.complete };
+    }
+
+    if (!branchPages.complete) {
+      return {
+        branch: ref,
+        treeRef: ref,
+        branchDiscoveryComplete: false,
+        branchDiscoveryReason: branchPages.reason ?? "github-branch-discovery-incomplete"
+      };
     }
   } catch {
-    // Fall through to a best-effort attempt with the raw ref.
+    return {
+      branch: ref,
+      treeRef: ref,
+      branchDiscoveryComplete: false,
+      branchDiscoveryReason: "github-branch-discovery-failed"
+    };
   }
 
-  return { branch: ref, treeRef: ref };
+  return { branch: ref, treeRef: ref, branchDiscoveryComplete: true };
+}
+
+async function readGitHubPages<T>(
+  request: <R>(pathName: string) => Promise<R>,
+  pathName: string,
+  budgets: InspectionBudgets
+): Promise<GitHubPageResult<T>> {
+  const perPage = 100;
+  const values: T[] = [];
+  const maxPages = Math.max(1, budgets.maxHttpRequests - 2);
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const separator = pathName.includes("?") ? "&" : "?";
+    const batch = await request<T[]>(`${pathName}${separator}per_page=${perPage}&page=${page}`);
+    values.push(...batch);
+    if (batch.length < perPage) {
+      return { values, complete: true };
+    }
+  }
+
+  return { values, complete: false, reason: "github-branch-discovery-incomplete" };
+}
+
+function buildGitHubFileInventory(
+  tree: GitHubTreeResponse,
+  budgets: InspectionBudgets,
+  extraReasons: string[] = []
+): GitHubFileInventory {
+  const files: FileRecord[] = [];
+  let skipped = 0;
+  let totalBytes = 0;
+  const reasons: string[] = [];
+
+  const blobs = tree.tree
+    .filter((item) => item.type === "blob")
+    .sort((left, right) => left.path.localeCompare(right.path));
+
+  for (const item of blobs) {
+    const sizeBytes = item.size ?? 0;
+    if (files.length >= budgets.maxFiles) {
+      skipped += 1;
+      reasons.push("file-count-limit");
+      continue;
+    }
+    if (totalBytes + sizeBytes > budgets.maxTotalBytes) {
+      skipped += 1;
+      reasons.push("total-byte-limit");
+      continue;
+    }
+
+    files.push({
+      path: item.path,
+      extension: path.extname(item.path).toLowerCase(),
+      sizeBytes,
+      kind: classifyFile(item.path)
+    });
+    totalBytes += sizeBytes;
+  }
+
+  reasons.push(...extraReasons);
+
+  if (tree.truncated) {
+    reasons.push("github-tree-truncated");
+  }
+
+  return {
+    files,
+    completeness: {
+      status: completenessStatus(skipped, reasons),
+      discovered: blobs.length,
+      included: files.length,
+      skipped,
+      reasons: uniqueReasons(reasons)
+    }
+  };
 }
 
 async function readGitHubManifests(
   request: <T>(pathName: string) => Promise<T>,
   repo: ParsedGitHubUrl,
   branch: string,
-  files: FileRecord[]
-): Promise<ManifestRecord[]> {
-  const targets = selectManifestTargets(files);
+  files: FileRecord[],
+  budgets: InspectionBudgets
+): Promise<ManifestReadResult> {
+  const selection = selectManifestTargets(files, budgets);
+  let failed = 0;
 
-  return mapWithConcurrency(targets, GITHUB_READ_CONCURRENCY, async ({ file, manager }) => {
+  const manifests = await mapWithConcurrency(selection.targets, budgets.concurrency, async ({ file, manager }) => {
     try {
       const content = await readGitHubFile(request, repo, branch, file.path);
       return parseManifest(file.path, manager, content);
     } catch (error) {
       // A single unreadable manifest should become a finding, not abort the run.
+      failed += 1;
       return {
         path: file.path,
         manager,
@@ -267,44 +412,87 @@ async function readGitHubManifests(
       } satisfies ManifestRecord;
     }
   });
+
+  const reasons = uniqueReasons([...selection.reasons, ...(failed > 0 ? ["manifest-read-failed"] : [])]);
+  return {
+    manifests,
+    completeness: {
+      status: completenessStatus(selection.skipped + failed, reasons),
+      discovered: selection.discovered,
+      read: selection.targets.length - failed,
+      skipped: selection.skipped,
+      oversized: selection.oversized,
+      failed,
+      reasons
+    }
+  };
 }
 
 async function readGitHubDocs(
   request: <T>(pathName: string) => Promise<T>,
   repo: ParsedGitHubUrl,
   branch: string,
-  files: FileRecord[]
-): Promise<{ docs: ReturnType<typeof createDocRecord>[]; skipped: number }> {
-  const { files: docFiles, skipped } = selectDocTargets(files);
+  files: FileRecord[],
+  budgets: InspectionBudgets
+): Promise<{ docs: ReturnType<typeof createDocRecord>[]; completeness: IngestionCompleteness["docs"] }> {
+  const selection = selectDocTargets(files, budgets);
+  const docFiles = selection.files;
+  let failed = 0;
 
-  const docs = await mapWithConcurrency(docFiles, GITHUB_READ_CONCURRENCY, async (file) => {
+  const docs = await mapWithConcurrency(docFiles, budgets.concurrency, async (file) => {
     try {
       const content = await readGitHubFile(request, repo, branch, file.path);
       return createDocRecord(file.path, content);
     } catch {
+      failed += 1;
       return undefined;
     }
   });
 
   const readable = docs.filter((doc): doc is NonNullable<typeof doc> => doc !== undefined);
-  return { docs: readable, skipped: skipped + (docs.length - readable.length) };
+  const reasons = uniqueReasons([...selection.reasons, ...(failed > 0 ? ["doc-read-failed"] : [])]);
+  return {
+    docs: readable,
+    completeness: {
+      status: completenessStatus(selection.skipped + failed, reasons),
+      discovered: selection.discovered,
+      read: readable.length,
+      skipped: selection.skipped,
+      oversized: selection.oversized,
+      failed,
+      reasons
+    }
+  };
 }
 
 async function readGitHubCommits(
   request: <T>(pathName: string) => Promise<T>,
   repo: ParsedGitHubUrl,
-  branch: string
-): Promise<CommitSummary[]> {
-  const commits = await request<GitHubCommitResponse[]>(
-    `/repos/${repo.owner}/${repo.repo}/commits?sha=${encodeURIComponent(branch)}&per_page=20`
-  );
+  branch: string,
+  maxCommits: number
+): Promise<{ commits: CommitSummary[]; skipped: number; reasons: string[] }> {
+  try {
+    const commits = await request<GitHubCommitResponse[]>(
+      `/repos/${repo.owner}/${repo.repo}/commits?sha=${encodeURIComponent(branch)}&per_page=${maxCommits}`
+    );
 
-  return commits.map((commit) => ({
-    sha: commit.sha,
-    authorName: commit.commit.author?.name ?? "Unknown",
-    committedAt: commit.commit.author?.date ?? "",
-    message: firstCommitLine(commit.commit.message ?? "")
-  }));
+    return {
+      commits: commits.map((commit) => ({
+        sha: commit.sha,
+        authorName: commit.commit.author?.name ?? "Unknown",
+        committedAt: commit.commit.author?.date ?? "",
+        message: firstCommitLine(commit.commit.message ?? "")
+      })),
+      skipped: 0,
+      reasons: []
+    };
+  } catch {
+    return {
+      commits: [],
+      skipped: 1,
+      reasons: ["commit-read-failed"]
+    };
+  }
 }
 
 async function readGitHubFile(
@@ -325,39 +513,176 @@ async function readGitHubFile(
   return Buffer.from(content.content.replace(/\s/g, ""), "base64").toString("utf8");
 }
 
-function createGitHubRequester(options: GitHubInspectionOptions) {
+function createGitHubRequester(
+  options: GitHubInspectionOptions,
+  budgetContext: InspectionBudgetContext
+): GitHubRequester {
+  const { budgets } = budgetContext;
   const fetchImpl = options.fetch ?? fetch;
+  const reasons: string[] = [];
+  const http: HttpCompleteness = {
+    status: "complete",
+    requestsMade: 0,
+    responsesTooLarge: 0,
+    failures: 0,
+    limitReached: false,
+    reasons
+  };
 
-  return async function request<T>(
+  async function request<T>(
     pathName: string,
     context: { repoUrl?: string } = {}
   ): Promise<T> {
-    const response = await fetchWithTimeout(
-      fetchImpl,
-      `https://api.github.com${pathName}`,
-      {
-        headers: {
-          accept: "application/vnd.github+json",
-          "user-agent": "project-autopsy",
-          ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
-        }
-      },
-      GITHUB_FETCH_TIMEOUT_MS
-    );
-
-    if (!response.ok) {
-      if (response.status === 404 && context.repoUrl) {
-        throw new Error(
-          `GitHub repository not found or private: ${context.repoUrl}. Provide a GitHub token to inspect private repositories.`
-        );
-      }
-      throw new Error(`GitHub API request failed (${response.status}) for ${pathName}`);
+    if (isRuntimeExpired(budgetContext)) {
+      markHttpPartial(http, "runtime-limit");
+      throw new Error("GitHub runtime budget exhausted");
     }
 
-    return (await response.json()) as T;
-  };
+    if (http.requestsMade >= budgets.maxHttpRequests) {
+      http.limitReached = true;
+      markHttpPartial(http, "http-request-limit");
+      throw new Error("GitHub HTTP request budget exhausted");
+    }
+
+    http.requestsMade += 1;
+    try {
+      const response = await fetchWithTimeout(
+        fetchImpl,
+        `https://api.github.com${pathName}`,
+        {
+          headers: {
+            accept: "application/vnd.github+json",
+            "user-agent": "project-autopsy",
+            ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
+          }
+        },
+        Math.min(budgets.fetchTimeoutMs, getRemainingRuntimeMs(budgetContext))
+      );
+
+      if (!response.ok) {
+        http.failures += 1;
+        markHttpPartial(http, "http-request-failed");
+        if (response.status === 404 && context.repoUrl) {
+          throw new Error(
+            `GitHub repository not found or private: ${context.repoUrl}. Provide a GitHub token to inspect private repositories.`
+          );
+        }
+        throw new Error(`GitHub API request failed (${response.status}) for ${pathName}`);
+      }
+
+      const contentLength = Number(response.headers.get("content-length") ?? "0");
+      if (contentLength > budgets.maxResponseBytes) {
+        throw new Error(`GitHub API response exceeded ${budgets.maxResponseBytes} bytes for ${pathName}`);
+      }
+
+      const text = await readResponseTextWithLimit(response, budgets.maxResponseBytes, pathName);
+
+      return JSON.parse(text) as T;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("response exceeded")) {
+        http.responsesTooLarge += 1;
+        markHttpPartial(http, "response-byte-limit");
+      } else if (!(error instanceof Error) || !/GitHub API request failed|repository not found/.test(error.message)) {
+        http.failures += 1;
+        markHttpPartial(http, "http-request-failed");
+      }
+      throw error;
+    }
+  }
+
+  return { request, http };
+}
+
+async function readResponseTextWithLimit(response: Response, maxBytes: number, pathName: string): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const text = await response.text();
+    if (Buffer.byteLength(text, "utf8") > maxBytes) {
+      throw new Error(`GitHub API response exceeded ${maxBytes} bytes for ${pathName}`);
+    }
+    return text;
+  }
+
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    if (!value) {
+      continue;
+    }
+
+    receivedBytes += value.byteLength;
+    if (receivedBytes > maxBytes) {
+      await reader.cancel();
+      throw new Error(`GitHub API response exceeded ${maxBytes} bytes for ${pathName}`);
+    }
+    chunks.push(value);
+  }
+
+  const body = new Uint8Array(receivedBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(body);
 }
 
 function firstCommitLine(message: string): string {
   return message.split(/\r?\n/)[0]?.trim() ?? "";
+}
+
+function markHttpPartial(http: HttpCompleteness, reason: string): void {
+  http.status = "partial";
+  http.reasons = uniqueReasons([...http.reasons, reason]);
+}
+
+function createIngestionWarnings(completeness: IngestionCompleteness): string[] {
+  const warnings: string[] = [];
+
+  if (completeness.files.status === "partial") {
+    const treeReason = completeness.files.reasons.includes("github-tree-truncated")
+      ? " GitHub returned a truncated file tree."
+      : "";
+    warnings.push(
+      `Repository file inventory was incomplete:${treeReason} ${completeness.files.skipped} item(s) were skipped (${completeness.files.reasons.join(", ")}). Missing-file, missing-test, and dependency conclusions are provisional.`
+    );
+  }
+
+  if (completeness.manifests.status === "partial") {
+    warnings.push(
+      `Manifest ingestion was incomplete: ${completeness.manifests.skipped} manifest(s) were skipped and ${completeness.manifests.failed} failed to read (${completeness.manifests.reasons.join(", ")}). Dependency and setup conclusions are provisional.`
+    );
+  }
+
+  if (completeness.docs.status === "partial") {
+    warnings.push(
+      `Documentation ingestion was incomplete: ${completeness.docs.skipped} documentation file(s) were skipped and ${completeness.docs.failed} failed to read (${completeness.docs.reasons.join(", ")}). Documentation-drift conclusions are provisional.`
+    );
+  }
+
+  if (completeness.commits.status === "partial") {
+    warnings.push(
+      `Commit ingestion was incomplete: ${completeness.commits.skipped} commit request(s) failed (${completeness.commits.reasons.join(", ")}). Momentum conclusions are provisional.`
+    );
+  }
+
+  if (completeness.http?.status === "partial") {
+    warnings.push(
+      `GitHub API ingestion was incomplete: ${completeness.http.failures} request(s) failed, ${completeness.http.responsesTooLarge} response(s) exceeded size limits, and request budget exhausted=${completeness.http.limitReached} (${completeness.http.reasons.join(", ")}). Conclusions are provisional.`
+    );
+  }
+
+  if (completeness.runtime.status === "partial") {
+    warnings.push(
+      `Repository ingestion exceeded the runtime budget after ${completeness.runtime.elapsedMs}ms (${completeness.runtime.reasons.join(", ")}). Conclusions are provisional.`
+    );
+  }
+
+  return warnings;
 }

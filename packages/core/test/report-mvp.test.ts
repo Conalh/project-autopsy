@@ -42,6 +42,7 @@ describe("Goal 3 report MVP", () => {
     expect(markdown).toContain("**Score:** ");
     expect(markdown).toContain("**Status:** at-risk");
     expect(markdown).toContain("## Activity Timeline");
+    expect(markdown).toContain("## Inspection Completeness");
     expect(markdown).toContain("## Dependency Focus");
     expect(markdown).toContain("## Evidence Index");
     expect(markdown).toContain("[EV-003]");
@@ -53,6 +54,7 @@ describe("Goal 3 report MVP", () => {
     const parsed = JSON.parse(json);
 
     expect(parsed.verdict.status).toBe("at-risk");
+    expect(parsed.snapshot.completeness.files.status).toBe("complete");
     expect(parsed.revivalTasks[0].id).toBe("TASK-001");
     expect(parsed.evidenceIndex["EV-003"].excerpt).toBe("npm run dev");
   });

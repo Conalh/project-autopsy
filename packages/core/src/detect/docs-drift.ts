@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { Finding, RepoSnapshot } from "../types.js";
+import { formatCompletenessReasons, hasPartialFileInventory } from "./uncertainty.js";
 
 export function detectDocsDrift(snapshot: RepoSnapshot): Finding[] {
   const findings: Finding[] = [];
@@ -17,11 +18,16 @@ export function detectDocsDrift(snapshot: RepoSnapshot): Finding[] {
 
       const normalized = normalizeReference(doc.path, reference, filePaths);
       if (!filePaths.has(normalized)) {
+        const provisional = hasPartialFileInventory(snapshot);
         findings.push({
           kind: "docs-drift",
-          severity: "medium",
-          title: `Documented file is missing: ${reference}`,
-          body: `Documentation references \`${reference}\`, but that file was not found in the repository snapshot.`,
+          severity: provisional ? "low" : "medium",
+          title: provisional
+            ? `Documented file may be missing (provisional): ${reference}`
+            : `Documented file is missing: ${reference}`,
+          body: provisional
+            ? `Documentation references \`${reference}\`, but the file inventory was incomplete (${formatCompletenessReasons(snapshot)}), so this missing-file conclusion is provisional.`
+            : `Documentation references \`${reference}\`, but that file was not found in the repository snapshot.`,
           evidence: [
             {
               kind: "docs",

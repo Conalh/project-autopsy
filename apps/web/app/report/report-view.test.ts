@@ -69,6 +69,13 @@ const baseReport: AutopsyReport = {
     summary: {
       projectName: "Fixture",
       technologies: ["npm"]
+    },
+    completeness: {
+      files: { status: "complete", discovered: 4, included: 4, skipped: 0, reasons: [] },
+      manifests: { status: "complete", discovered: 1, read: 1, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+      docs: { status: "complete", discovered: 0, read: 0, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+      commits: { status: "complete", requested: 1, read: 1, skipped: 0, reasons: [] },
+      runtime: { status: "complete", elapsedMs: 0, limitMs: 60000, timedOut: false, reasons: [] }
     }
   },
   findings: [

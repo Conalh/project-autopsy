@@ -3,9 +3,11 @@ import type {
   DocRecord,
   FileKind,
   FileRecord,
+  InspectionBudgets,
   ManifestManager,
   ManifestRecord
 } from "../types.js";
+import { DEFAULT_INGESTION_BUDGETS, completenessStatus, uniqueReasons } from "./budgets.js";
 
 const SOURCE_EXTENSIONS = new Set([
   ".c",
@@ -49,12 +51,26 @@ export const IGNORED_DIRECTORIES = new Set([
   "vendor"
 ]);
 
-// Read caps keep ingestion bounded on large or generated-heavy repositories and
-// limit GitHub API rate-limit exposure.
-export const MAX_MANIFEST_BYTES = 1024 * 1024;
-export const MAX_DOC_BYTES = 512 * 1024;
-export const MAX_TOTAL_DOC_BYTES = 4 * 1024 * 1024;
-export const MAX_DOC_COUNT = 80;
+export interface ManifestTargetSelection {
+  targets: Array<{ file: FileRecord; manager: ManifestManager }>;
+  discovered: number;
+  skipped: number;
+  oversized: number;
+  limitSkipped: number;
+  reasons: string[];
+  status: "complete" | "partial";
+}
+
+export interface DocTargetSelection {
+  files: FileRecord[];
+  discovered: number;
+  skipped: number;
+  oversized: number;
+  limitSkipped: number;
+  totalBytesSkipped: number;
+  reasons: string[];
+  status: "complete" | "partial";
+}
 
 export function isVendoredPath(filePath: string): boolean {
   return filePath
@@ -153,22 +169,44 @@ export function detectManifestManager(filePath: string): ManifestManager | undef
  * a single huge file cannot blow up ingestion or rate limits.
  */
 export function selectManifestTargets(
-  files: FileRecord[]
-): Array<{ file: FileRecord; manager: ManifestManager }> {
+  files: FileRecord[],
+  budgets: InspectionBudgets = DEFAULT_INGESTION_BUDGETS
+): ManifestTargetSelection {
   const targets: Array<{ file: FileRecord; manager: ManifestManager }> = [];
+  let discovered = 0;
+  let oversized = 0;
+  let limitSkipped = 0;
+  const reasons: string[] = [];
 
   for (const file of files) {
     const manager = detectManifestManager(file.path);
     if (!manager) {
       continue;
     }
-    if (file.sizeBytes > MAX_MANIFEST_BYTES) {
+    discovered += 1;
+    if (file.sizeBytes > budgets.maxManifestBytes) {
+      oversized += 1;
+      reasons.push("manifest-byte-limit");
+      continue;
+    }
+    if (targets.length >= budgets.maxManifests) {
+      limitSkipped += 1;
+      reasons.push("manifest-count-limit");
       continue;
     }
     targets.push({ file, manager });
   }
 
-  return targets;
+  const skipped = oversized + limitSkipped;
+  return {
+    targets,
+    discovered,
+    skipped,
+    oversized,
+    limitSkipped,
+    reasons: uniqueReasons(reasons),
+    status: completenessStatus(skipped, reasons)
+  };
 }
 
 /**
@@ -177,7 +215,10 @@ export function selectManifestTargets(
  * plus how many eligible docs were dropped so callers can warn instead of
  * silently truncating.
  */
-export function selectDocTargets(files: FileRecord[]): { files: FileRecord[]; skipped: number } {
+export function selectDocTargets(
+  files: FileRecord[],
+  budgets: InspectionBudgets = DEFAULT_INGESTION_BUDGETS
+): DocTargetSelection {
   const eligible = files
     .filter((file) => file.kind === "docs" && isDocPath(file.path) && !isVendoredPath(file.path))
     .sort(
@@ -186,22 +227,42 @@ export function selectDocTargets(files: FileRecord[]): { files: FileRecord[]; sk
 
   const selected: FileRecord[] = [];
   let totalBytes = 0;
+  let oversized = 0;
+  let limitSkipped = 0;
+  let totalBytesSkipped = 0;
+  const reasons: string[] = [];
 
   for (const file of eligible) {
-    if (selected.length >= MAX_DOC_COUNT) {
-      break;
-    }
-    if (file.sizeBytes > MAX_DOC_BYTES) {
+    if (selected.length >= budgets.maxDocs) {
+      limitSkipped += 1;
+      reasons.push("doc-count-limit");
       continue;
     }
-    if (totalBytes + file.sizeBytes > MAX_TOTAL_DOC_BYTES) {
-      break;
+    if (file.sizeBytes > budgets.maxDocBytes) {
+      oversized += 1;
+      reasons.push("doc-byte-limit");
+      continue;
+    }
+    if (totalBytes + file.sizeBytes > budgets.maxTotalDocBytes) {
+      totalBytesSkipped += 1;
+      reasons.push("doc-total-byte-limit");
+      continue;
     }
     totalBytes += file.sizeBytes;
     selected.push(file);
   }
 
-  return { files: selected, skipped: eligible.length - selected.length };
+  const skipped = oversized + limitSkipped + totalBytesSkipped;
+  return {
+    files: selected,
+    discovered: eligible.length,
+    skipped,
+    oversized,
+    limitSkipped,
+    totalBytesSkipped,
+    reasons: uniqueReasons(reasons),
+    status: completenessStatus(skipped, reasons)
+  };
 }
 
 export function scoreDocPath(filePath: string): number {

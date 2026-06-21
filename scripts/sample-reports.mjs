@@ -27,6 +27,7 @@ for (const sample of samples) {
   const report = await analyzeRepository(sample.source);
   report.metadata.generatedAt = stableGeneratedAt;
   report.snapshot.rootPath = path.relative(repoRoot, sample.source).split(path.sep).join("/");
+  report.snapshot.completeness.runtime.elapsedMs = 0;
 
   await writeOrCheck(`${sample.name}.md`, renderMarkdownReport(report));
   await writeOrCheck(`${sample.name}.json`, renderJsonReport(report));

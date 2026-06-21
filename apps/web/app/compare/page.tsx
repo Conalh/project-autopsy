@@ -1,5 +1,8 @@
+import { headers } from "next/headers";
 import Link from "next/link";
+import { AccessRequired } from "../lib/access-ui";
 import { createWebRunStore } from "../lib/run-store";
+import { evaluateInspectAuth, inspectAuthFailureMessage } from "../lib/source-policy";
 import {
   buildFindingDeltaChartItems,
   buildRunComparison,
@@ -17,6 +20,17 @@ interface ComparePageProps {
 }
 
 export default async function ComparePage({ searchParams }: ComparePageProps) {
+  const auth = evaluateInspectAuth(await headers());
+  if (!auth.authorized) {
+    return (
+      <AccessRequired
+        title="Comparison access required"
+        message={inspectAuthFailureMessage(auth)}
+        href="/runs"
+      />
+    );
+  }
+
   const params = await searchParams;
   const leftId = params.left?.trim();
   const rightId = params.right?.trim();
@@ -172,7 +186,14 @@ function RunSummaryCard({ label, run }: { label: string; run: RunComparison["lef
             <span className={`status-pill status-pill-${run.verdictStatus}`}>{run.verdictStatus}</span>
           </dd>
         </div>
+        <div>
+          <dt>Analysis</dt>
+          <dd>{run.analysisStatus}</dd>
+        </div>
       </dl>
+      {run.limitationReasons.length > 0 ? (
+        <p className="muted">Limits: {run.limitationReasons.join(", ")}</p>
+      ) : null}
       <Link className="inline-action" href={`/runs/${run.id}`}>
         Open report
       </Link>
