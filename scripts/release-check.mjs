@@ -15,7 +15,11 @@ const packages = await Promise.all(
 );
 
 const version = packages[0].manifest.version;
-const expected = (process.env.GITHUB_REF_NAME?.replace(/^v/, "") || process.argv[2] || version).trim();
+const githubTagVersion =
+  process.env.GITHUB_REF_TYPE === "tag" || process.env.GITHUB_REF?.startsWith("refs/tags/")
+    ? process.env.GITHUB_REF_NAME?.replace(/^v/, "")
+    : undefined;
+const expected = (process.argv[2] || githubTagVersion || version).trim();
 
 for (const entry of packages) {
   if (entry.manifest.version !== expected) {
