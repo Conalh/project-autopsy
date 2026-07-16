@@ -1,11 +1,24 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { renderJsonReport, renderMarkdownReport, type AutopsyReport } from "@project-autopsy/core";
-import { createWebRunStore } from "./run-store";
+import { createWebRunStore, findWorkspaceRoot } from "./run-store";
 
 describe("web run store selection", () => {
+  test("finds the monorepo root from either the root or a nested app directory", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "project-autopsy-root-"));
+    const nested = path.join(root, "apps", "web");
+    await Promise.all([
+      mkdir(path.join(root, "fixtures"), { recursive: true }),
+      mkdir(path.join(root, "packages"), { recursive: true }),
+      mkdir(nested, { recursive: true })
+    ]);
+
+    expect(findWorkspaceRoot(root)).toBe(root);
+    expect(findWorkspaceRoot(nested)).toBe(root);
+  });
+
   test("uses SQLite when no Postgres URL is configured", async () => {
     const dbPath = path.join(await mkdtemp(path.join(tmpdir(), "project-autopsy-web-store-")), "runs.sqlite");
     const store = await createWebRunStore({

@@ -26,7 +26,10 @@ describe("GitHub App setup", () => {
       authMode: "github_app_install_required",
       readyForPrivateRepos: false,
       installUrl: "https://github.com/apps/project-autopsy/installations/new",
-      missing: ["PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID"]
+      missing: [
+        "PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID",
+        "PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET"
+      ]
     });
   });
 

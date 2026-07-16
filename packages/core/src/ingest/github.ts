@@ -34,6 +34,8 @@ export interface ParsedGitHubUrl {
 export interface GitHubInspectionOptions {
   fetch?: typeof fetch;
   token?: string;
+  /** Reject private repositories before reading their tree or contents. */
+  publicOnly?: boolean;
   branch?: string;
   checkDependencyRegistry?: boolean;
   npmRegistryFetch?: typeof fetch;
@@ -47,6 +49,7 @@ interface GitHubRepoResponse {
   html_url: string;
   description?: string | null;
   default_branch: string;
+  private?: boolean;
   stargazers_count?: number;
   forks_count?: number;
   open_issues_count?: number;
@@ -91,6 +94,13 @@ interface ResolvedBranch {
   branch: string;
   /** A commit sha to fetch the tree with when the ref contained a slash. */
   treeRef: string;
+}
+
+export class PrivateRepositoryNotAllowedError extends Error {
+  constructor(repoUrl: string) {
+    super(`Hosted inspection is limited to public GitHub repositories: ${repoUrl}`);
+    this.name = "PrivateRepositoryNotAllowedError";
+  }
 }
 
 export function parseGitHubUrl(value: string): ParsedGitHubUrl {
@@ -150,6 +160,9 @@ export async function inspectGitHubRepository(
   const repo = await request<GitHubRepoResponse>(`/repos/${parsed.owner}/${parsed.repo}`, {
     repoUrl: parsed.url
   });
+  if (options.publicOnly && repo.private !== false) {
+    throw new PrivateRepositoryNotAllowedError(parsed.url);
+  }
   const { branch, treeRef } = await resolveBranch(
     request,
     parsed,

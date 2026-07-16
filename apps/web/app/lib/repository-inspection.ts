@@ -6,6 +6,7 @@ export interface RepositoryInspectionOptions {
   branch?: string;
   checkDependencyRegistry: boolean;
   token?: string;
+  publicOnly: boolean;
 }
 
 export interface RepositoryInspectionJobPayload {
@@ -13,6 +14,7 @@ export interface RepositoryInspectionJobPayload {
   save: boolean;
   branch?: string;
   checkDependencyRegistry: boolean;
+  publicOnly: boolean;
 }
 
 export async function inspectRepository(
@@ -39,7 +41,8 @@ export async function inspectRepositoryJobPayload(
   return inspectRepository(payload.source, payload.save, {
     branch: payload.branch,
     checkDependencyRegistry: payload.checkDependencyRegistry,
-    token: await resolveGitHubToken()
+    token: await resolveGitHubToken(),
+    publicOnly: payload.publicOnly
   });
 }
 
@@ -48,11 +51,13 @@ export function toRepositoryInspectionJobPayload(input: {
   save: boolean;
   branch?: string;
   checkDependencyRegistry: boolean;
+  publicOnly: boolean;
 }): RepositoryInspectionJobPayload {
   return {
     source: input.source,
     save: input.save,
     ...(input.branch ? { branch: input.branch } : {}),
-    checkDependencyRegistry: input.checkDependencyRegistry
+    checkDependencyRegistry: input.checkDependencyRegistry,
+    publicOnly: input.publicOnly
   };
 }

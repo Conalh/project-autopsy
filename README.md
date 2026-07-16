@@ -132,7 +132,7 @@ export PROJECT_AUTOPSY_GITHUB_TOKEN=<token>
 node apps/cli/dist/index.js inspect https://github.com/owner/private-repo
 ```
 
-The web/API surface also supports GitHub App installation tokens through environment configuration. A personal access token takes precedence when both modes are configured:
+The web/API surface can also use a GitHub App installation token for authenticated GitHub API requests. A personal access token takes precedence when both modes are configured:
 
 ```powershell
 $env:PROJECT_AUTOPSY_GITHUB_APP_ID="<app-id>"
@@ -145,16 +145,18 @@ $env:PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH="C:\path\to\github-app-private-
 Inline private keys are supported with `PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY`; escaped `\n` sequences are normalized before signing.
 If your app install URL does not follow the standard slug format, set `PROJECT_AUTOPSY_GITHUB_APP_INSTALL_URL`.
 When GitHub redirects back to `/api/github-app/callback?installation_id=...`, Project Autopsy stores that installation id in `.project-autopsy/github-app-installation.json` by default, or in Postgres when `PROJECT_AUTOPSY_POSTGRES_URL` or `DATABASE_URL` is configured. Override the local store path with `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH`; an explicit `PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID` still wins.
-Set `PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET` in hosted mode so install redirects include a signed `state` value and callbacks without a valid state are rejected.
-Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views such as `/ops`. Authenticated requests can send `Authorization: Bearer <token>` or `x-project-autopsy-admin-token: <token>`.
+`PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET` is required before the install/callback routes will operate; redirects include a short-lived signed `state` value and callbacks without a valid state are rejected.
+Set `PROJECT_AUTOPSY_ADMIN_TOKEN` in hosted mode to protect operational views such as `/ops` and the worker trigger. Production mode fails closed when it is absent. Authenticated requests can send `Authorization: Bearer <token>` or `x-project-autopsy-admin-token: <token>`.
 
 #### Hosted Source Policy And Limits
 
-A hosted web/API instance inspects **public github.com URLs only** by default. Local filesystem inspection (which can read arbitrary server paths) is disabled unless you explicitly opt in for local development:
+A hosted web/API instance inspects **public github.com URLs only** by default, even if its server-side GitHub token can access private repositories. Local filesystem inspection (which can read arbitrary server paths) is disabled unless you explicitly opt in for local development:
 
 ```powershell
 $env:PROJECT_AUTOPSY_ALLOW_LOCAL_PATHS="true"   # development only; never set on a public deployment
 ```
+
+Private repository access is available through the CLI. A deliberately access-controlled API deployment can opt in by setting both `PROJECT_AUTOPSY_ALLOW_PRIVATE_REPOSITORIES=true` and `PROJECT_AUTOPSY_INSPECT_TOKEN`; requests must present the inspect token. The browser `/report` route remains public-repository-only.
 
 `POST /api/repositories/inspect` is rate limited per client (`PROJECT_AUTOPSY_INSPECT_RATE_LIMIT`, default `60` per window; `PROJECT_AUTOPSY_INSPECT_RATE_WINDOW_SECONDS`, default `60`; set the limit to `0` to disable). It can also require a token via `PROJECT_AUTOPSY_INSPECT_TOKEN`, sent as `Authorization: Bearer <token>` or `x-project-autopsy-inspect-token: <token>`.
 
@@ -194,7 +196,7 @@ Start the Next.js app:
 npm run web:dev
 ```
 
-To host it publicly, see [DEPLOY.md](DEPLOY.md) — hosted mode inspects public GitHub URLs only by default, so it is safe to deploy.
+For a public deployment, see [DEPLOY.md](DEPLOY.md). The default source policy is public-GitHub-only, but operators still need to configure rate limits, secrets, persistence, and platform-level abuse controls for their environment.
 
 The first screen is the inspector: paste a GitHub URL, optionally save the run, optionally check registry freshness, then open the report. Saved reports can be reopened, filtered, grouped, shared, compared, and exported from the web UI.
 
@@ -340,14 +342,14 @@ Project Autopsy is a local-first portfolio/devtool slice. What works today:
 - **One core, three surfaces.** Local and GitHub ingestion feed a single normalized snapshot and `AutopsyReport`, consumed identically by the CLI, the Next.js web UI, and the API routes.
 - **Reports.** Score, verdict, evidence-linked findings, stall hypotheses, and a phased revival plan — exported as Markdown or JSON.
 - **Saved runs.** SQLite by default (Postgres in hosted mode), with browsing, filtering, score trends, share links, and pairwise comparison in the web UI.
-- **GitHub auth.** Public repos, or private repos via a personal access token or GitHub App installation token.
+- **GitHub auth.** Public web inspections by default; private CLI inspection via a personal access token, with an explicit access-controlled opt-in for the API.
 - **Hosted ops.** Queued inspections with job polling, bounded external-worker batches, an operations dashboard, and admin-token-gated operational views.
-- **Hosted safety.** Public deployments inspect github.com URLs only by default; `/api/repositories/inspect` is rate-limited and supports an optional access token (see [Hosted Source Policy And Limits](#hosted-source-policy-and-limits)).
+- **Hosted boundaries.** Public deployments reject local paths and private repositories by default; the API and server-rendered report route share rate limiting and optional inspect auth (see [Hosted Source Policy And Limits](#hosted-source-policy-and-limits)).
 - **Quality gates.** CI runs build, tests, coverage + badge drift, sample-report drift, and package-surface checks; sample reports are committed and regression-checked.
 
 Limits worth knowing:
 
-- Hosted mode is GitHub-URL-only by default with per-client rate limiting; richer multi-tenant auth is future work.
+- Hosted mode is public-GitHub-only by default with per-process rate limiting; a multi-instance deployment needs a shared or platform-level limiter.
 - Registry freshness is npm/PyPI/crates.io-only and opt-in.
 - The analyzer never executes inspected repository commands.
 - GitHub App callback persistence uses local ignored storage by default and Postgres in hosted mode.
@@ -359,7 +361,7 @@ Limits worth knowing:
 2. npm release decision: package names, dependency strategy, license, and versioning.
 3. Registry-backed drift checks for Go and .NET.
 4. Coverage threshold policy and package-level coverage notes.
-5. Broader production auth and deployment hardening.
+5. Browser-session auth and multi-tenant deployment hardening.
 
 ## License
 

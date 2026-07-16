@@ -56,6 +56,9 @@ export function createInspectRateLimiter(env: RateLimitEnv = process.env): RateL
   };
 }
 
+/** Shared by the API route and server-rendered report route. */
+export const inspectRateLimiter = createInspectRateLimiter();
+
 /** Derive a stable client key from proxy headers, falling back to a shared bucket. */
 export function clientKeyFromHeaders(headers: { get(name: string): string | null }): string {
   const forwarded = headers.get("x-forwarded-for");

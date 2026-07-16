@@ -7,15 +7,15 @@ export async function GET(): Promise<Response> {
     return Response.json({ error: "GitHub App install URL is not configured." }, { status: 400 });
   }
 
-  return Response.redirect(withCallbackState(setup.installUrl), 307);
-}
-
-function withCallbackState(installUrl: string): string {
   const stateSecret = readEnv("PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET");
   if (!stateSecret) {
-    return installUrl;
+    return Response.json({ error: "GitHub App callback state secret is required." }, { status: 503 });
   }
 
+  return Response.redirect(withCallbackState(setup.installUrl, stateSecret), 307);
+}
+
+function withCallbackState(installUrl: string, stateSecret: string): string {
   const url = new URL(installUrl);
   url.searchParams.set("state", createGitHubAppCallbackState(stateSecret));
   return url.toString();

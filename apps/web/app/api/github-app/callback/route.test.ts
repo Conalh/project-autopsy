@@ -22,11 +22,17 @@ describe("GitHub App callback route", () => {
 
   test("stores the installation id from GitHub's callback", async () => {
     const filePath = await createStorePath();
+    const state = createGitHubAppCallbackState("state-secret");
     process.env.PROJECT_AUTOPSY_GITHUB_APP_ID = "123";
     process.env.PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH = filePath;
     process.env.PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY = "private-key";
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET = "state-secret";
 
-    const response = await GET(new Request("http://localhost/api/github-app/callback?installation_id=456&setup_action=install"));
+    const response = await GET(
+      new Request(
+        `http://localhost/api/github-app/callback?installation_id=456&setup_action=install&state=${encodeURIComponent(state)}`
+      )
+    );
     const body = await response.json();
     const stored = JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
 
@@ -48,11 +54,20 @@ describe("GitHub App callback route", () => {
   });
 
   test("returns a setup error when installation id is missing", async () => {
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET = "state-secret";
     const response = await GET(new Request("http://localhost/api/github-app/callback?setup_action=install"));
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("GitHub App callback must include installation_id.");
+    expect(body.error).toBe("GitHub App callback must include a numeric installation_id.");
+  });
+
+  test("requires callback state protection to be configured", async () => {
+    const response = await GET(new Request("http://localhost/api/github-app/callback?installation_id=456"));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("GitHub App callback state secret is required.");
   });
 
   test("requires signed callback state when a state secret is configured", async () => {

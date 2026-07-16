@@ -12,7 +12,7 @@ describe("GitHub App UI summary", () => {
       })
     ).toEqual({
       label: "GitHub App ready",
-      detail: "Private repository inspections can use the stored installation.",
+      detail: "Authenticated requests can use the stored installation; private access remains policy-gated.",
       tone: "ok",
       actionHref: "/api/github-app/status",
       actionLabel: "View status"
@@ -25,11 +25,15 @@ describe("GitHub App UI summary", () => {
         authMode: "github_app_install_required",
         readyForPrivateRepos: false,
         installUrl: "https://github.com/apps/project-autopsy/installations/new",
-        missing: ["PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID"]
+        missing: [
+          "PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID",
+          "PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET"
+        ]
       })
     ).toEqual({
       label: "GitHub App install needed",
-      detail: "Missing PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID.",
+      detail:
+        "Missing PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID, PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET.",
       tone: "warning",
       actionHref: "/api/github-app/install",
       actionLabel: "Install app"

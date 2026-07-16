@@ -32,10 +32,14 @@ export function getGitHubAppSetup(env: GitHubAppSetupEnv = process.env): GitHubA
     readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY") ??
     readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH");
   const installUrl = readInstallUrl(env);
+  const callbackStateSecret = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET");
   const missing = [
     ...(!appId ? ["PROJECT_AUTOPSY_GITHUB_APP_ID"] : []),
     ...(!installation?.id ? ["PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID"] : []),
-    ...(!privateKey ? ["PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY or PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH"] : [])
+    ...(!privateKey ? ["PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY or PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH"] : []),
+    ...(!installation?.id && installUrl && !callbackStateSecret
+      ? ["PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET"]
+      : [])
   ];
 
   if (appId && privateKey && installation?.id) {
@@ -82,10 +86,14 @@ export async function getGitHubAppSetupAsync(
     readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY") ??
     readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH");
   const installUrl = readInstallUrl(env);
+  const callbackStateSecret = readEnv(env, "PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET");
   const missing = [
     ...(!appId ? ["PROJECT_AUTOPSY_GITHUB_APP_ID"] : []),
     ...(!installation?.id ? ["PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_ID"] : []),
-    ...(!privateKey ? ["PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY or PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH"] : [])
+    ...(!privateKey ? ["PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY or PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY_PATH"] : []),
+    ...(!installation?.id && installUrl && !callbackStateSecret
+      ? ["PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET"]
+      : [])
   ];
 
   if (appId && privateKey && installation?.id) {

@@ -14,7 +14,7 @@ export function evaluateAdminAuth(headers: HeaderReader, env: AdminAuthEnv = pro
   if (!configuredToken) {
     return {
       configured: false,
-      authorized: true
+      authorized: readEnv(env, "NODE_ENV") !== "production"
     };
   }
 

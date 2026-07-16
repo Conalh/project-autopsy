@@ -31,9 +31,18 @@ export function isLocalPathInspectionAllowed(env: PolicyEnv = process.env): bool
 }
 
 /**
- * Hosted instances accept only public github.com URLs. Anything else is treated
- * as a local path and rejected unless local inspection has been explicitly
- * enabled for development.
+ * Private hosted inspection is deliberately double opt-in: the deployment
+ * must enable it and must gate inspection requests with an access token.
+ */
+export function isPrivateRepositoryInspectionAllowed(env: PolicyEnv = process.env): boolean {
+  const enabled = env.PROJECT_AUTOPSY_ALLOW_PRIVATE_REPOSITORIES?.trim().toLowerCase() === "true";
+  const accessToken = env.PROJECT_AUTOPSY_INSPECT_TOKEN?.trim();
+  return enabled && Boolean(accessToken);
+}
+
+/**
+ * Hosted instances accept GitHub URLs. The analysis core separately enforces
+ * public-only access unless private hosted inspection is double opted-in.
  */
 export function assertSourceAllowed(source: string, env: PolicyEnv = process.env): void {
   if (isGitHubUrl(source)) {

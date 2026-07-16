@@ -9,6 +9,13 @@ describe("admin auth", () => {
     });
   });
 
+  test("fails closed in production when no admin token is configured", () => {
+    expect(evaluateAdminAuth(new Headers(), { NODE_ENV: "production" })).toEqual({
+      configured: false,
+      authorized: false
+    });
+  });
+
   test("allows a matching bearer token", () => {
     const headers = new Headers({
       authorization: "Bearer secret-admin-token"

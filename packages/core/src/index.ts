@@ -3,6 +3,7 @@ export {
   inspectGitHubRepository,
   isGitHubUrl,
   parseGitHubUrl,
+  PrivateRepositoryNotAllowedError,
   type GitHubInspectionOptions,
   type GitHubRepositoryInput,
   type ParsedGitHubUrl

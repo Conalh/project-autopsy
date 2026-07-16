@@ -14,7 +14,7 @@ export function summarizeGitHubAppSetup(setup: GitHubAppSetup): GitHubAppSetupSu
   if (setup.authMode === "token") {
     return {
       label: "Token auth ready",
-      detail: "Private repository inspections can use the configured token.",
+      detail: "Authenticated GitHub API requests are configured. Hosted private access still requires explicit policy opt-in.",
       tone: "ok",
       actionHref: "/api/github-app/status",
       actionLabel: "View status"
@@ -26,8 +26,8 @@ export function summarizeGitHubAppSetup(setup: GitHubAppSetup): GitHubAppSetupSu
       label: "GitHub App ready",
       detail:
         setup.installationSource === "stored"
-          ? "Private repository inspections can use the stored installation."
-          : "Private repository inspections can use the configured installation.",
+          ? "Authenticated requests can use the stored installation; private access remains policy-gated."
+          : "Authenticated requests can use the configured installation; private access remains policy-gated.",
       tone: "ok",
       actionHref: "/api/github-app/status",
       actionLabel: "View status"
@@ -37,7 +37,7 @@ export function summarizeGitHubAppSetup(setup: GitHubAppSetup): GitHubAppSetupSu
   if (setup.authMode === "github_app_install_required") {
     return {
       label: "GitHub App install needed",
-      detail: setup.missing.length > 0 ? `Missing ${setup.missing.join(", ")}.` : "Install the GitHub App to inspect private repositories.",
+      detail: setup.missing.length > 0 ? `Missing ${setup.missing.join(", ")}.` : "Install the GitHub App to enable authenticated API requests.",
       tone: "warning",
       actionHref: setup.installUrl ? "/api/github-app/install" : "/api/github-app/status",
       actionLabel: setup.installUrl ? "Install app" : "View status"
@@ -46,7 +46,7 @@ export function summarizeGitHubAppSetup(setup: GitHubAppSetup): GitHubAppSetupSu
 
   return {
     label: "Public repo mode",
-    detail: "Public repository inspections work now; private repositories need a token or GitHub App setup.",
+    detail: "Public repository inspections work without server-side GitHub credentials.",
     tone: "neutral",
     actionHref: "/api/github-app/status",
     actionLabel: "View status"

@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Evidence-backed autopsy reports and revival plans for stalled software repositories.",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -15,6 +18,7 @@
     "coverage:badge": "node scripts/coverage-badge.mjs",
     "coverage:badge:check": "node scripts/coverage-badge.mjs --check",
     "package:check": "npm run build && node scripts/package-check.mjs",
+    "release:check": "node scripts/release-check.mjs",
     "check": "npm run build && npm run test",
     "web:dev": "npm run dev --workspace @project-autopsy/web",
     "samples:update": "npm run build --workspace @project-autopsy/core && node scripts/sample-reports.mjs --write",

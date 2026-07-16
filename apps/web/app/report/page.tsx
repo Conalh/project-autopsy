@@ -1,9 +1,11 @@
 import path from "node:path";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
-import { createWebRunStore } from "../lib/run-store";
+import { createWebRunStore, findWorkspaceRoot } from "../lib/run-store";
 import { resolveGitHubToken } from "../lib/github-auth";
-import { assertSourceAllowed } from "../lib/source-policy";
+import { clientKeyFromHeaders, inspectRateLimiter } from "../lib/inspect-rate-limit";
+import { assertSourceAllowed, evaluateInspectAuth } from "../lib/source-policy";
 import { ReportView } from "./report-view";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +44,16 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
       assertSourceAllowed(resolved.source);
     }
 
+    const requestHeaders = await headers();
+    const auth = evaluateInspectAuth(requestHeaders);
+    if (auth.configured && !auth.authorized) {
+      throw new Error("Inspection access token required.");
+    }
+    const rate = inspectRateLimiter.check(clientKeyFromHeaders(requestHeaders));
+    if (!rate.allowed) {
+      throw new Error(`Too many inspection requests. Try again in ${rate.retryAfterSeconds} seconds.`);
+    }
+
     const source = resolved.source;
     const token = await resolveGitHubToken();
 
@@ -50,6 +62,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
         branch: params.branch,
         checkDependencyRegistry: params.checkRegistry === "1",
         token,
+        publicOnly: true,
         store: await createWebRunStore()
       });
       return <ReportView report={saved.report} savedRunId={saved.id} />;
@@ -58,7 +71,8 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
     const report = await analyzeRepository(source, {
       branch: params.branch,
       checkDependencyRegistry: params.checkRegistry === "1",
-      token
+      token,
+      publicOnly: true
     });
     return <ReportView report={report} />;
   } catch (error) {
@@ -79,7 +93,7 @@ function resolveSource(
   params: { source?: string; demo?: string }
 ): { source: string; trusted: boolean } | undefined {
   if (params.demo === "fixture") {
-    return { source: path.resolve(process.cwd(), "../../fixtures/stalled-npm-app"), trusted: true };
+    return { source: path.join(findWorkspaceRoot(), "fixtures/stalled-npm-app"), trusted: true };
   }
 
   if (params.source) {

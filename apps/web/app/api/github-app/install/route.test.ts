@@ -8,13 +8,14 @@ describe("GitHub App install route", () => {
     delete process.env.PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET;
   });
 
-  test("redirects to the configured GitHub App install URL", async () => {
+  test("requires a callback state secret before redirecting", async () => {
     process.env.PROJECT_AUTOPSY_GITHUB_APP_SLUG = "project-autopsy";
 
     const response = await GET();
+    const body = await response.json();
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://github.com/apps/project-autopsy/installations/new");
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("GitHub App callback state secret is required.");
   });
 
   test("adds signed callback state when a state secret is configured", async () => {

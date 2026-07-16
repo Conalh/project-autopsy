@@ -25,11 +25,11 @@ export default async function HomePage() {
         <div className="inspect-copy">
           <p className="eyebrow">Project Autopsy</p>
           <h1 id="inspect-title">Inspect a stalled repository</h1>
-          <p className="muted">Create evidence-backed reports for public repos, private repos, and saved local runs.</p>
+          <p className="muted">Create evidence-backed reports for public GitHub repositories and saved local runs.</p>
           <dl className="hero-facts">
             <div>
               <dt>Inputs</dt>
-              <dd>Local, GitHub, private</dd>
+              <dd>Local CLI, public GitHub</dd>
             </div>
             <div>
               <dt>Output</dt>

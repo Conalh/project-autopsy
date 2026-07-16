@@ -31,6 +31,7 @@ function createGitHubFetch(): {
         html_url: "https://github.com/acme/stalled-notes",
         description: "A repo that stalled before validation existed.",
         default_branch: "main",
+        private: false,
         stargazers_count: 7,
         forks_count: 1,
         open_issues_count: 3,
@@ -186,5 +187,29 @@ describe("GitHub repository inspection", () => {
     ).rejects.toThrow(
       "GitHub repository not found or private: https://github.com/acme/private-notes. Provide a GitHub token to inspect private repositories."
     );
+  });
+
+  test("rejects a private repository before reading its contents in public-only mode", async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (input: string | URL | Request) => {
+      calls.push(input.toString());
+      return jsonResponse({
+        name: "private-notes",
+        full_name: "acme/private-notes",
+        html_url: "https://github.com/acme/private-notes",
+        default_branch: "main",
+        private: true
+      });
+    }) as typeof fetch;
+
+    await expect(
+      inspectGitHubRepository(
+        { url: "https://github.com/acme/private-notes" },
+        { fetch: fetchImpl, token: "server-token", publicOnly: true }
+      )
+    ).rejects.toThrow(
+      "Hosted inspection is limited to public GitHub repositories: https://github.com/acme/private-notes"
+    );
+    expect(calls).toEqual(["https://api.github.com/repos/acme/private-notes"]);
   });
 });

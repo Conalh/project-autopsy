@@ -63,7 +63,7 @@ function readEnv(env: Record<string, string | undefined>, name: string): string 
   return value && value.length > 0 ? value : undefined;
 }
 
-function findWorkspaceRoot(start = process.cwd()): string {
+export function findWorkspaceRoot(start = process.cwd()): string {
   let current = start;
 
   while (true) {

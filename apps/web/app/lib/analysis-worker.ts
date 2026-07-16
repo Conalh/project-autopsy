@@ -120,7 +120,8 @@ function readRepositoryInspectionPayload(payload: unknown): RepositoryInspection
     ...(typeof candidate.branch === "string" && candidate.branch.trim().length > 0
       ? { branch: candidate.branch }
       : {}),
-    checkDependencyRegistry: candidate.checkDependencyRegistry === true
+    checkDependencyRegistry: candidate.checkDependencyRegistry === true,
+    publicOnly: candidate.publicOnly !== false
   };
 }
 

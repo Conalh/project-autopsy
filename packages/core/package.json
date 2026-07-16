@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Shared analysis core for Project Autopsy repository reports.",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
