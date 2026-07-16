@@ -73,7 +73,7 @@ describe("project-autopsy CLI", () => {
     expect(help.stderr).toBe("");
     expect(version).toEqual({
       exitCode: 0,
-      stdout: "project-autopsy 0.1.0\n",
+      stdout: "project-autopsy 0.2.0\n",
       stderr: ""
     });
   });

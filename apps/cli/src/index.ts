@@ -13,7 +13,7 @@ import {
   type GitHubInspectionOptions
 } from "@project-autopsy/core";
 
-const CLI_VERSION = "0.1.0";
+const CLI_VERSION = "0.2.0";
 
 export interface CliResult {
   exitCode: number;
