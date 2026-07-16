@@ -1,4 +1,15 @@
-import type { Finding, ManifestRecord, RepoSnapshot } from "../types.js";
+import type {
+  Finding,
+  InspectionBudgetOverrides,
+  ManifestRecord,
+  RepoSnapshot
+} from "../types.js";
+import {
+  createInspectionBudgetContext,
+  getRemainingRuntimeMs,
+  isRuntimeExpired,
+  type InspectionBudgetContext
+} from "../ingest/budgets.js";
 import { fetchWithTimeout, mapWithConcurrency } from "../util/async.js";
 
 export interface DependencyDriftOptions {
@@ -6,6 +17,8 @@ export interface DependencyDriftOptions {
   npmRegistryFetch?: typeof fetch;
   pypiRegistryFetch?: typeof fetch;
   cratesRegistryFetch?: typeof fetch;
+  budgets?: InspectionBudgetOverrides;
+  budgetContext?: InspectionBudgetContext;
 }
 
 interface NpmRegistryResponse {
@@ -35,11 +48,25 @@ interface EcosystemConfig {
     DependencyDriftOptions,
     "npmRegistryFetch" | "pypiRegistryFetch" | "cratesRegistryFetch"
   >;
-  fetchLatest: (name: string, registryFetch: typeof fetch) => Promise<string>;
+  fetchLatest: (name: string, registryFetch: typeof fetch, timeoutMs: number) => Promise<string>;
 }
 
-const REGISTRY_CONCURRENCY = 8;
 const REGISTRY_TIMEOUT_MS = 10000;
+
+interface DependencyEntry {
+  manifest: ManifestRecord;
+  ecosystem: EcosystemConfig;
+  registryFetch: typeof fetch;
+  name: string;
+  version: string;
+  kind: "dependency" | "dev dependency";
+}
+
+interface DependencyLookupResult {
+  entry: DependencyEntry;
+  latestVersion?: string;
+  error?: string;
+}
 
 const ECOSYSTEMS: Partial<Record<ManifestRecord["manager"], EcosystemConfig>> = {
   npm: { label: "npm", fetchOption: "npmRegistryFetch", fetchLatest: fetchNpmLatestVersion },
@@ -57,84 +84,97 @@ export async function detectDependencyDrift(
 
   // Cache latest-version lookups (and their in-flight promises) across every
   // manifest so a package shared by multiple workspaces is fetched once.
+  const budgetContext = options.budgetContext ?? createInspectionBudgetContext(options.budgets);
+  const { budgets } = budgetContext;
   const cache = new Map<string, Promise<string>>();
+  const entries = snapshot.manifests.flatMap((manifest) => readDependencyEntries(manifest, options));
+  const lookups = await mapWithConcurrency(entries, budgets.registryConcurrency, async (entry) => {
+    if (isRuntimeExpired(budgetContext)) {
+      return {
+        entry,
+        error: "registry lookup skipped because the inspection runtime budget was exhausted"
+      } satisfies DependencyLookupResult;
+    }
 
-  const registryJobs = snapshot.manifests
-    .filter((manifest) => !manifest.parseError && manifest.manager in ECOSYSTEMS)
-    .map((manifest) => detectManifestDependencyDrift(manifest, options, cache));
+    try {
+      return {
+        entry,
+        latestVersion: await resolveLatestVersion(
+          cache,
+          entry.ecosystem,
+          entry.name,
+          entry.registryFetch,
+          Math.min(REGISTRY_TIMEOUT_MS, getRemainingRuntimeMs(budgetContext))
+        )
+      } satisfies DependencyLookupResult;
+    } catch (error) {
+      return {
+        entry,
+        error: error instanceof Error ? error.message : String(error)
+      } satisfies DependencyLookupResult;
+    }
+  });
 
-  return (await Promise.all(registryJobs)).flat();
+  const findings: Finding[] = [];
+  for (const result of lookups) {
+    if (result.error) {
+      findings.push(createDependencyLookupFailureFinding(result.entry, result.error));
+      continue;
+    }
+
+    const finding = createMajorDriftFinding(
+      result.entry.manifest,
+      result.entry.name,
+      result.entry.version,
+      result.latestVersion ?? "",
+      result.entry.kind,
+      result.entry.ecosystem.label
+    );
+    if (finding) {
+      findings.push(finding);
+    }
+  }
+
+  return findings;
 }
 
-async function detectManifestDependencyDrift(
-  manifest: ManifestRecord,
-  options: DependencyDriftOptions,
-  cache: Map<string, Promise<string>>
-): Promise<Finding[]> {
+function readDependencyEntries(manifest: ManifestRecord, options: DependencyDriftOptions): DependencyEntry[] {
+  if (manifest.parseError) {
+    return [];
+  }
+
   const ecosystem = ECOSYSTEMS[manifest.manager];
   if (!ecosystem) {
     return [];
   }
 
   const registryFetch = options[ecosystem.fetchOption] ?? fetch;
-  const entries = [
+  return [
     ...Object.entries(manifest.dependencies).map(([name, version]) => ({
+      manifest,
+      ecosystem,
+      registryFetch,
       name,
       version,
       kind: "dependency" as const
     })),
     ...Object.entries(manifest.devDependencies).map(([name, version]) => ({
+      manifest,
+      ecosystem,
+      registryFetch,
       name,
       version,
       kind: "dev dependency" as const
     }))
   ].filter((entry) => readMajorVersion(entry.version) !== undefined);
-
-  try {
-    const latestVersions = await mapWithConcurrency(entries, REGISTRY_CONCURRENCY, (entry) =>
-      resolveLatestVersion(cache, ecosystem, entry.name, registryFetch)
-    );
-
-    const findings: Finding[] = [];
-    entries.forEach((entry, index) => {
-      const finding = createMajorDriftFinding(
-        manifest,
-        entry.name,
-        entry.version,
-        latestVersions[index] as string,
-        entry.kind,
-        ecosystem.label
-      );
-      if (finding) {
-        findings.push(finding);
-      }
-    });
-
-    return findings;
-  } catch (error) {
-    return [
-      {
-        kind: "dependency-drift",
-        severity: "info",
-        title: `${formatManagerName(manifest.manager)} dependency freshness was not checked`,
-        body: `Registry lookup failed: ${error instanceof Error ? error.message : String(error)}`,
-        evidence: [
-          {
-            kind: "manifest",
-            path: manifest.path,
-            excerpt: `${formatManagerName(manifest.manager)} registry lookup was requested but did not complete`
-          }
-        ]
-      }
-    ];
-  }
 }
 
 function resolveLatestVersion(
   cache: Map<string, Promise<string>>,
   ecosystem: EcosystemConfig,
   name: string,
-  registryFetch: typeof fetch
+  registryFetch: typeof fetch,
+  timeoutMs: number
 ): Promise<string> {
   const key = `${ecosystem.label}:${name}`;
   const cached = cache.get(key);
@@ -142,17 +182,18 @@ function resolveLatestVersion(
     return cached;
   }
 
-  const pending = ecosystem.fetchLatest(name, registryFetch);
+  const pending = ecosystem.fetchLatest(name, registryFetch, timeoutMs);
   cache.set(key, pending);
   return pending;
 }
 
-async function fetchNpmLatestVersion(name: string, registryFetch: typeof fetch): Promise<string> {
+async function fetchNpmLatestVersion(name: string, registryFetch: typeof fetch, timeoutMs: number): Promise<string> {
   const body = await fetchRegistryJson<NpmRegistryResponse>(
     registryFetch,
     `https://registry.npmjs.org/${encodeURIComponent(name)}`,
     "npm registry",
-    name
+    name,
+    timeoutMs
   );
   const latest = body["dist-tags"]?.latest;
   if (!latest) {
@@ -162,12 +203,13 @@ async function fetchNpmLatestVersion(name: string, registryFetch: typeof fetch):
   return latest;
 }
 
-async function fetchPypiLatestVersion(name: string, registryFetch: typeof fetch): Promise<string> {
+async function fetchPypiLatestVersion(name: string, registryFetch: typeof fetch, timeoutMs: number): Promise<string> {
   const body = await fetchRegistryJson<PypiRegistryResponse>(
     registryFetch,
     `https://pypi.org/pypi/${encodeURIComponent(name)}/json`,
     "PyPI",
-    name
+    name,
+    timeoutMs
   );
   const latest = body.info?.version;
   if (!latest) {
@@ -177,12 +219,13 @@ async function fetchPypiLatestVersion(name: string, registryFetch: typeof fetch)
   return latest;
 }
 
-async function fetchCratesLatestVersion(name: string, registryFetch: typeof fetch): Promise<string> {
+async function fetchCratesLatestVersion(name: string, registryFetch: typeof fetch, timeoutMs: number): Promise<string> {
   const body = await fetchRegistryJson<CratesRegistryResponse>(
     registryFetch,
     `https://crates.io/api/v1/crates/${encodeURIComponent(name)}`,
     "crates.io",
-    name
+    name,
+    timeoutMs
   );
   const latest = body.crate?.max_version ?? body.crate?.newest_version;
   if (!latest) {
@@ -196,7 +239,8 @@ async function fetchRegistryJson<T>(
   registryFetch: typeof fetch,
   url: string,
   registryName: string,
-  packageName: string
+  packageName: string,
+  timeoutMs: number
 ): Promise<T> {
   const response = await fetchWithTimeout(
     registryFetch,
@@ -207,7 +251,7 @@ async function fetchRegistryJson<T>(
         "user-agent": "project-autopsy"
       }
     },
-    REGISTRY_TIMEOUT_MS
+    timeoutMs
   );
 
   if (!response.ok) {
@@ -215,6 +259,22 @@ async function fetchRegistryJson<T>(
   }
 
   return (await response.json()) as T;
+}
+
+function createDependencyLookupFailureFinding(entry: DependencyEntry, error: string): Finding {
+  return {
+    kind: "dependency-drift",
+    severity: "info",
+    title: `${entry.ecosystem.label} dependency freshness was not checked: ${entry.name}`,
+    body: `Registry lookup failed for ${entry.name}: ${error}`,
+    evidence: [
+      {
+        kind: "manifest",
+        path: entry.manifest.path,
+        excerpt: `${entry.name} registry lookup was requested but did not complete`
+      }
+    ]
+  };
 }
 
 function createMajorDriftFinding(

@@ -11,6 +11,7 @@ import {
   type PostgresQueryClient,
   waitForAnalysisJob
 } from "./analysis-queue";
+import type { AutopsyReport } from "@project-autopsy/core";
 
 describe("analysis job queue", () => {
   test("runs queued jobs and exposes completed results", async () => {
@@ -267,6 +268,50 @@ describe("analysis job queue", () => {
     });
     await expect(store.claimNextQueuedJob()).resolves.toBeUndefined();
   });
+
+  test("redacts sensitive job data and minimizes report-shaped results before persistence", async () => {
+    const client = new FakePostgresClient();
+    const store = createPostgresAnalysisJobStore(client);
+
+    await store.createJob({
+      id: "job_sensitive",
+      status: "queued",
+      createdAt: "2026-05-27T00:00:00.000Z",
+      updatedAt: "2026-05-27T00:00:00.000Z",
+      payload: {
+        source: "https://github.com/acme/project",
+        githubToken: "github_pat_secret123",
+        privateKey: "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----"
+      }
+    });
+    const processed = await store.updateJob("job_sensitive", {
+      status: "failed",
+      attempts: 1,
+      result: {
+        report: createRawReport(),
+        installationToken: "ghs_secret123"
+      },
+      error: "worker failed with Bearer github_pat_secret123"
+    });
+
+    const stored = await store.getJob<{
+      report: AutopsyReport;
+      installationToken: string;
+    }>("job_sensitive");
+
+    expect(processed?.error).not.toContain("github_pat_secret123");
+    expect(stored?.payload).toMatchObject({
+      source: "https://github.com/acme/project",
+      githubToken: "[redacted]",
+      privateKey: "[redacted]"
+    });
+    expect(stored?.result?.installationToken).toBe("[redacted]");
+    expect(stored?.result?.report.snapshot.files).toEqual([]);
+    expect(stored?.result?.report.snapshot.docs[0]?.content).toBe("");
+    expect(stored?.error).not.toContain("github_pat_secret123");
+    expect(client.rows.get("job_sensitive")?.result_json).not.toContain("Private docs");
+    expect(client.rows.get("job_sensitive")?.payload_json).not.toContain("github_pat_secret123");
+  });
 });
 
 interface AnalysisJobRow {
@@ -283,7 +328,7 @@ interface AnalysisJobRow {
 
 class FakePostgresClient implements PostgresQueryClient {
   readonly queries: Array<{ text: string; values: readonly unknown[] }> = [];
-  private rows = new Map<string, AnalysisJobRow>();
+  readonly rows = new Map<string, AnalysisJobRow>();
 
   async query<Row = Record<string, unknown>>(
     text: string,
@@ -371,6 +416,82 @@ class FakePostgresClient implements PostgresQueryClient {
 
     return { rows: [] };
   }
+}
+
+function createRawReport(): AutopsyReport {
+  return {
+    metadata: {
+      analyzerVersion: "0.1.0",
+      reportSchemaVersion: "1.0",
+      source: "github_url",
+      generatedAt: "2026-05-26T00:00:00.000Z"
+    },
+    verdict: {
+      score: 70,
+      status: "needs-cleanup",
+      summary: "Fixture needs cleanup."
+    },
+    summary: {
+      projectName: "Sensitive Queue Fixture",
+      sourceType: "github_url",
+      fileCount: 1,
+      technologies: ["typescript"],
+      findingCounts: {
+        info: 0,
+        low: 0,
+        medium: 0,
+        high: 0
+      }
+    },
+    snapshot: {
+      sourceType: "github_url",
+      rootPath: "https://github.com/acme/sensitive-queue-fixture",
+      owner: "acme",
+      repo: "sensitive-queue-fixture",
+      url: "https://github.com/acme/sensitive-queue-fixture",
+      defaultBranch: "main",
+      fileCount: 1,
+      totalSizeBytes: 100,
+      languages: {
+        ts: 1
+      },
+      files: [{ path: "src/secret.ts", extension: ".ts", sizeBytes: 100, kind: "source" }],
+      manifests: [
+        {
+          path: "package.json",
+          manager: "npm",
+          parsed: { name: "secret-project", private: true },
+          scripts: { test: "vitest run" },
+          dependencies: {},
+          devDependencies: {}
+        }
+      ],
+      docs: [{ path: "README.md", title: "Secret Project", content: "Private docs and roadmap." }],
+      commits: [
+        {
+          sha: "abc123",
+          authorName: "Private Author",
+          committedAt: "2026-05-26T00:00:00.000Z",
+          message: "Private roadmap"
+        }
+      ],
+      summary: {
+        projectName: "Sensitive Queue Fixture",
+        technologies: ["typescript"]
+      },
+      completeness: {
+        files: { status: "complete", discovered: 1, included: 1, skipped: 0, reasons: [] },
+        manifests: { status: "complete", discovered: 1, read: 1, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+        docs: { status: "complete", discovered: 1, read: 1, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+        commits: { status: "complete", requested: 1, read: 1, skipped: 0, reasons: [] },
+        runtime: { status: "complete", elapsedMs: 0, limitMs: 60000, timedOut: false, reasons: [] }
+      }
+    },
+    findings: [],
+    stallHypotheses: [],
+    revivalTasks: [],
+    evidenceIndex: {}
+  };
 }
 
 async function waitFor(readJob: () => Promise<{ status: string } | undefined>): Promise<void> {

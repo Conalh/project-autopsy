@@ -18,8 +18,9 @@ export function countFindings(findings: Finding[]): FindingCounts {
 }
 
 export function createVerdict(findings: Finding[]): ReportVerdict {
-  const counts = countFindings(findings);
-  const penalty = findings.reduce((total, finding) => total + SEVERITY_WEIGHTS[finding.severity], 0);
+  const repositoryHealthFindings = findings.filter(isRepositoryHealthFinding);
+  const counts = countFindings(repositoryHealthFindings);
+  const penalty = repositoryHealthFindings.reduce((total, finding) => total + SEVERITY_WEIGHTS[finding.severity], 0);
   const score = Math.max(0, 100 - penalty);
 
   if (counts.high > 0 || score < 70) {
@@ -43,4 +44,8 @@ export function createVerdict(findings: Finding[]): ReportVerdict {
     status: "stable",
     summary: "This repo looks stable in the first-pass autopsy."
   };
+}
+
+function isRepositoryHealthFinding(finding: Finding): boolean {
+  return finding.kind !== "ingestion-integrity";
 }

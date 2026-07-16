@@ -1,5 +1,8 @@
+import { headers } from "next/headers";
 import Link from "next/link";
+import { AccessRequired } from "../lib/access-ui";
 import { createWebRunStore } from "../lib/run-store";
+import { evaluateInspectAuth, inspectAuthFailureMessage } from "../lib/source-policy";
 import {
   buildRunFilterOptions,
   createRunFilters,
@@ -19,6 +22,16 @@ interface RunsPageProps {
 }
 
 export default async function RunsPage({ searchParams }: RunsPageProps) {
+  const auth = evaluateInspectAuth(await headers());
+  if (!auth.authorized) {
+    return (
+      <AccessRequired
+        title="Saved-run access required"
+        message={inspectAuthFailureMessage(auth)}
+      />
+    );
+  }
+
   const params = await searchParams;
   const runs = await (await createWebRunStore()).listRuns(50);
   const filters = createRunFilters(params);

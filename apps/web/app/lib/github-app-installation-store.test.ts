@@ -5,6 +5,8 @@ import { describe, expect, test } from "vitest";
 import { getGitHubAppSetup } from "./github-app-setup";
 import {
   createPostgresGitHubAppInstallationStore,
+  issueGitHubAppCallbackStateNonce,
+  consumeGitHubAppCallbackStateNonce,
   migratePostgresGitHubAppInstallationStore,
   readGitHubAppInstallation,
   saveGitHubAppInstallation,
@@ -91,6 +93,34 @@ describe("GitHub App installation store", () => {
     });
     expect(client.queries[0]).toContain("CREATE TABLE IF NOT EXISTS github_app_installations");
   });
+
+  test("atomically consumes file-backed callback state nonces once", async () => {
+    const filePath = await createStorePath();
+
+    issueGitHubAppCallbackStateNonce(
+      {
+        nonce: "nonce",
+        expiresAt: "2026-05-27T05:10:00.000Z"
+      },
+      { path: filePath }
+    );
+
+    expect(consumeGitHubAppCallbackStateNonce("nonce", { path: filePath, now: new Date("2026-05-27T05:05:00.000Z") })).toBe(true);
+    expect(consumeGitHubAppCallbackStateNonce("nonce", { path: filePath, now: new Date("2026-05-27T05:05:00.000Z") })).toBe(false);
+  });
+
+  test("atomically consumes Postgres callback state nonces once", async () => {
+    const client = new FakePostgresClient();
+    const store = createPostgresGitHubAppInstallationStore(client);
+
+    await store.issueCallbackStateNonce({
+      nonce: "nonce",
+      expiresAt: "2026-05-27T05:10:00.000Z"
+    });
+
+    await expect(store.consumeCallbackStateNonce("nonce", { now: new Date("2026-05-27T05:05:00.000Z") })).resolves.toBe(true);
+    await expect(store.consumeCallbackStateNonce("nonce", { now: new Date("2026-05-27T05:05:00.000Z") })).resolves.toBe(false);
+  });
 });
 
 async function createStorePath(): Promise<string> {
@@ -108,6 +138,7 @@ interface InstallationRow {
 class FakePostgresClient implements PostgresQueryClient {
   queries: string[] = [];
   private row: InstallationRow | undefined;
+  private readonly callbackStateNonces = new Map<string, string>();
 
   async query<Row = Record<string, unknown>>(
     text: string,
@@ -122,6 +153,21 @@ class FakePostgresClient implements PostgresQueryClient {
         setup_action: typeof values[2] === "string" ? values[2] : null,
         updated_at: String(values[3])
       };
+    }
+
+    if (text.includes("INSERT INTO github_app_callback_state_nonces")) {
+      this.callbackStateNonces.set(String(values[0]), String(values[1]));
+    }
+
+    if (text.includes("DELETE FROM github_app_callback_state_nonces")) {
+      const nonceHash = String(values[0]);
+      const now = String(values[1]);
+      const expiresAt = this.callbackStateNonces.get(nonceHash);
+      const consumed = expiresAt && expiresAt >= now ? 1 : 0;
+      if (consumed) {
+        this.callbackStateNonces.delete(nonceHash);
+      }
+      return { rows: [{ consumed_count: consumed } as Row] };
     }
 
     if (text.includes("SELECT") && text.includes("github_app_installations")) {

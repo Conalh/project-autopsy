@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { Pool } from "pg";
 
@@ -20,6 +21,11 @@ interface SaveGitHubAppInstallationInput {
   setupAction?: string;
 }
 
+interface GitHubAppCallbackStateNonceInput {
+  nonce: string;
+  expiresAt: string;
+}
+
 export interface PostgresQueryClient {
   query<Row = Record<string, unknown>>(text: string, values?: readonly unknown[]): Promise<{ rows: Row[] }>;
 }
@@ -27,6 +33,8 @@ export interface PostgresQueryClient {
 export interface AsyncGitHubAppInstallationStore {
   readInstallation(): Promise<GitHubAppInstallation | undefined>;
   saveInstallation(input: SaveGitHubAppInstallationInput): Promise<GitHubAppInstallation>;
+  issueCallbackStateNonce(input: GitHubAppCallbackStateNonceInput): Promise<void>;
+  consumeCallbackStateNonce(nonce: string, options?: { now?: Date }): Promise<boolean>;
 }
 
 export interface WebGitHubAppInstallationStoreOptions {
@@ -49,6 +57,15 @@ CREATE TABLE IF NOT EXISTS github_app_installations (
   setup_action TEXT,
   updated_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS github_app_callback_state_nonces (
+  nonce_hash TEXT PRIMARY KEY,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_github_app_callback_state_nonces_expires_at
+  ON github_app_callback_state_nonces(expires_at);
 `;
 
 const DEFAULT_INSTALLATION_RECORD_ID = "default";
@@ -116,6 +133,76 @@ export function saveGitHubAppInstallation(
   return installation;
 }
 
+export function issueGitHubAppCallbackStateNonce(
+  input: GitHubAppCallbackStateNonceInput,
+  options: GitHubAppInstallationStoreOptions = {}
+): void {
+  const nonceHash = hashNonce(input.nonce);
+  const expiresAt = normalize(input.expiresAt);
+  if (!nonceHash || !expiresAt) {
+    throw new Error("GitHub App callback state nonce and expiry are required.");
+  }
+
+  const filePath = callbackStateNoncePath(nonceHash, options);
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(
+    /*turbopackIgnore: true*/ filePath,
+    `${JSON.stringify({ nonceHash, expiresAt, createdAt: new Date().toISOString() }, null, 2)}\n`,
+    "utf8"
+  );
+}
+
+export function consumeGitHubAppCallbackStateNonce(
+  nonce: string,
+  options: GitHubAppInstallationStoreOptions & { now?: Date } = {}
+): boolean {
+  const nonceHash = hashNonce(nonce);
+  if (!nonceHash) {
+    return false;
+  }
+
+  const filePath = callbackStateNoncePath(nonceHash, options);
+  let expiresAt: number;
+  try {
+    const body = JSON.parse(readFileSync(/*turbopackIgnore: true*/ filePath, "utf8")) as { expiresAt?: unknown };
+    expiresAt = typeof body.expiresAt === "string" ? Date.parse(body.expiresAt) : Number.NaN;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+
+  const now = options.now?.getTime() ?? Date.now();
+  if (!Number.isFinite(expiresAt) || expiresAt < now) {
+    try {
+      unlinkSync(/*turbopackIgnore: true*/ filePath);
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+        throw error;
+      }
+    }
+    return false;
+  }
+
+  const consumedPath = `${filePath}.consumed-${process.pid}-${Date.now()}`;
+  try {
+    renameSync(/*turbopackIgnore: true*/ filePath, consumedPath);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "EEXIST")) {
+      return false;
+    }
+    throw error;
+  }
+
+  try {
+    unlinkSync(/*turbopackIgnore: true*/ consumedPath);
+  } catch {
+    // The nonce was still consumed by the atomic rename. Cleanup is best effort.
+  }
+  return true;
+}
+
 export async function migratePostgresGitHubAppInstallationStore(client: PostgresQueryClient): Promise<void> {
   await client.query(POSTGRES_GITHUB_APP_INSTALLATION_SCHEMA);
 }
@@ -171,6 +258,46 @@ export function createPostgresGitHubAppInstallationStore(
         ...(setupAction ? { setupAction } : {}),
         updatedAt
       };
+    },
+
+    async issueCallbackStateNonce(input) {
+      const nonceHash = hashNonce(input.nonce);
+      const expiresAt = normalize(input.expiresAt);
+      if (!nonceHash || !expiresAt) {
+        throw new Error("GitHub App callback state nonce and expiry are required.");
+      }
+
+      await client.query(
+        `INSERT INTO github_app_callback_state_nonces (
+          nonce_hash,
+          expires_at,
+          created_at
+        ) VALUES ($1, $2, $3)
+        ON CONFLICT (nonce_hash) DO UPDATE SET
+          expires_at = EXCLUDED.expires_at,
+          created_at = EXCLUDED.created_at`,
+        [nonceHash, expiresAt, new Date().toISOString()]
+      );
+    },
+
+    async consumeCallbackStateNonce(nonce, options = {}) {
+      const nonceHash = hashNonce(nonce);
+      if (!nonceHash) {
+        return false;
+      }
+
+      const result = await client.query<{ consumed_count: number | string }>(
+        `WITH consumed AS (
+          DELETE FROM github_app_callback_state_nonces
+          WHERE nonce_hash = $1
+            AND expires_at >= $2
+          RETURNING nonce_hash
+        )
+        SELECT count(*)::int AS consumed_count FROM consumed`,
+        [nonceHash, (options.now ?? new Date()).toISOString()]
+      );
+
+      return Number(result.rows[0]?.consumed_count ?? 0) > 0;
     }
   };
 }
@@ -184,6 +311,12 @@ export function createFileGitHubAppInstallationStore(
     },
     async saveInstallation(input) {
       return saveGitHubAppInstallation(input, options);
+    },
+    async issueCallbackStateNonce(input) {
+      return issueGitHubAppCallbackStateNonce(input, options);
+    },
+    async consumeCallbackStateNonce(nonce, consumeOptions = {}) {
+      return consumeGitHubAppCallbackStateNonce(nonce, { ...options, ...consumeOptions });
     }
   };
 }
@@ -230,8 +363,17 @@ function resolveInstallationPath(options: GitHubAppInstallationStoreOptions): st
   );
 }
 
+function callbackStateNoncePath(nonceHash: string, options: GitHubAppInstallationStoreOptions): string {
+  return path.join(path.dirname(resolveInstallationPath(options)), "github-app-callback-state", `${nonceHash}.json`);
+}
+
 function normalize(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function hashNonce(nonce: string): string | undefined {
+  const normalized = normalize(nonce);
+  return normalized ? createHash("sha256").update(normalized, "utf8").digest("hex") : undefined;
 }
 
 function createPostgresPool(connectionString: string | undefined): Pool {

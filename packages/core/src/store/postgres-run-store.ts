@@ -6,6 +6,9 @@ import type {
   SourceType,
   VerdictStatus
 } from "../types.js";
+import { createExternalAutopsyReport } from "../report/external.js";
+import { renderJsonReport } from "../report/json.js";
+import { renderMarkdownReport } from "../report/markdown.js";
 
 export interface PostgresQueryClient {
   query<Row = Record<string, unknown>>(
@@ -52,7 +55,10 @@ export function createPostgresRunStore(client: PostgresQueryClient): AsyncAnalys
     async saveRun(input) {
       const id = `run_${randomUUID()}`;
       const createdAt = new Date().toISOString();
-      const reportJson = JSON.stringify(input.report);
+      const report = createExternalAutopsyReport(input.report);
+      const markdown = renderMarkdownReport(report);
+      const json = renderJsonReport(report);
+      const reportJson = JSON.stringify(report);
 
       await client.query(
         `INSERT INTO analysis_runs (
@@ -69,27 +75,27 @@ export function createPostgresRunStore(client: PostgresQueryClient): AsyncAnalys
         [
           id,
           input.source,
-          input.report.summary.sourceType,
-          input.report.summary.projectName,
-          input.report.verdict.score,
-          input.report.verdict.status,
+          report.summary.sourceType,
+          report.summary.projectName,
+          report.verdict.score,
+          report.verdict.status,
           createdAt,
           reportJson,
-          input.markdown
+          markdown
         ]
       );
 
       return {
         id,
         source: input.source,
-        sourceType: input.report.summary.sourceType,
-        projectName: input.report.summary.projectName,
-        score: input.report.verdict.score,
-        verdictStatus: input.report.verdict.status,
+        sourceType: report.summary.sourceType,
+        projectName: report.summary.projectName,
+        score: report.verdict.score,
+        verdictStatus: report.verdict.status,
         createdAt,
-        report: input.report,
-        markdown: input.markdown,
-        json: `${reportJson}\n`
+        report,
+        markdown,
+        json
       };
     },
 
@@ -133,13 +139,46 @@ export function createPostgresRunStore(client: PostgresQueryClient): AsyncAnalys
         return undefined;
       }
 
-      const reportJson = typeof row.report_json === "string" ? row.report_json : JSON.stringify(row.report_json);
+      const storedReportJson = typeof row.report_json === "string" ? row.report_json : JSON.stringify(row.report_json);
+      const report = createExternalAutopsyReport(JSON.parse(storedReportJson) as AutopsyReport);
+      const markdown = renderMarkdownReport(report);
+      const json = renderJsonReport(report);
+      const reportJson = JSON.stringify(report);
+
+      if (storedReportJson !== reportJson || row.markdown !== markdown) {
+        await client.query(
+          `UPDATE analysis_runs
+          SET
+            source_type = $2,
+            project_name = $3,
+            score = $4,
+            verdict_status = $5,
+            report_json = $6::jsonb,
+            markdown = $7
+          WHERE id = $1`,
+          [
+            row.id,
+            report.summary.sourceType,
+            report.summary.projectName,
+            report.verdict.score,
+            report.verdict.status,
+            reportJson,
+            markdown
+          ]
+        );
+      }
 
       return {
-        ...toSummary(row),
-        report: JSON.parse(reportJson) as AutopsyReport,
-        markdown: row.markdown,
-        json: `${reportJson}\n`
+        ...toSummary({
+          ...row,
+          source_type: report.summary.sourceType,
+          project_name: report.summary.projectName,
+          score: report.verdict.score,
+          verdict_status: report.verdict.status
+        }),
+        report,
+        markdown,
+        json
       };
     }
   };

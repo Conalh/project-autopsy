@@ -246,7 +246,7 @@ describe("#5 GitHub branch parsing", () => {
     );
     expect(subpath.defaultBranch).toBe("main");
 
-    expect(branchFetch.calls).toContain("https://api.github.com/repos/acme/widget/branches?per_page=100");
+    expect(branchFetch.calls).toContain("https://api.github.com/repos/acme/widget/branches?per_page=100&page=1");
     expect(branchFetch.calls).toContain(
       "https://api.github.com/repos/acme/widget/git/trees/sha-feature?recursive=1"
     );
@@ -281,6 +281,7 @@ describe("#3 GitHub tree truncation", () => {
 
     expect(integrity?.severity).toBe("high");
     expect(integrity?.title).toBe("Repository inspection may be incomplete");
+    expect(report.verdict.score).toBeGreaterThan(70);
   });
 });
 
@@ -304,7 +305,7 @@ function createWidgetFetch(): { fetch: typeof fetch; calls: string[] } {
   const responses = new Map<string, unknown>([
     ["https://api.github.com/repos/acme/widget", { name: "widget", full_name: "acme/widget", html_url: "", default_branch: "main" }],
     [
-      "https://api.github.com/repos/acme/widget/branches?per_page=100",
+      "https://api.github.com/repos/acme/widget/branches?per_page=100&page=1",
       [
         { name: "main", commit: { sha: "sha-main" } },
         { name: "feature/new-ui", commit: { sha: "sha-feature" } }

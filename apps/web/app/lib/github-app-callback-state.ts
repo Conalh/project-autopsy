@@ -5,11 +5,17 @@ const DEFAULT_MAX_AGE_MS = 10 * 60 * 1000;
 interface CreateGitHubAppCallbackStateOptions {
   issuedAt?: Date;
   nonce?: string;
+  maxAgeMs?: number;
 }
 
 interface VerifyGitHubAppCallbackStateOptions {
   maxAgeMs?: number;
   now?: Date;
+}
+
+interface GitHubAppCallbackStateNonceStore {
+  issueCallbackStateNonce(input: { nonce: string; expiresAt: string }): Promise<void>;
+  consumeCallbackStateNonce(nonce: string, options?: { now?: Date }): Promise<boolean>;
 }
 
 interface GitHubAppCallbackStatePayload {
@@ -31,34 +37,78 @@ export function createGitHubAppCallbackState(
   return `${encodedPayload}.${signature}`;
 }
 
+export async function createStoredGitHubAppCallbackState(
+  secret: string,
+  store: GitHubAppCallbackStateNonceStore,
+  options: CreateGitHubAppCallbackStateOptions = {}
+): Promise<string> {
+  const state = createGitHubAppCallbackState(secret, options);
+  const payload = readVerifiedStatePayload(state, secret, {
+    ...options,
+    now: options.issuedAt ?? new Date()
+  });
+  if (!payload) {
+    throw new Error("Generated GitHub App callback state could not be verified.");
+  }
+
+  await store.issueCallbackStateNonce({
+    nonce: payload.nonce,
+    expiresAt: new Date(Date.parse(payload.issuedAt) + (options.maxAgeMs ?? DEFAULT_MAX_AGE_MS)).toISOString()
+  });
+
+  return state;
+}
+
 export function verifyGitHubAppCallbackState(
   state: string,
   secret: string,
   options: VerifyGitHubAppCallbackStateOptions = {}
 ): boolean {
+  return Boolean(readVerifiedStatePayload(state, secret, options));
+}
+
+export function verifyAndConsumeGitHubAppCallbackState(
+  state: string,
+  secret: string,
+  store: GitHubAppCallbackStateNonceStore,
+  options: VerifyGitHubAppCallbackStateOptions = {}
+): Promise<boolean> {
+  const payload = readVerifiedStatePayload(state, secret, options);
+  if (!payload) {
+    return Promise.resolve(false);
+  }
+
+  return store.consumeCallbackStateNonce(payload.nonce, { now: options.now });
+}
+
+function readVerifiedStatePayload(
+  state: string,
+  secret: string,
+  options: VerifyGitHubAppCallbackStateOptions
+): GitHubAppCallbackStatePayload | undefined {
   const [encodedPayload, signature, extra] = state.split(".");
   if (!encodedPayload || !signature || extra) {
-    return false;
+    return undefined;
   }
 
   const expectedSignature = signStatePayload(encodedPayload, secret);
   if (!constantTimeEqual(signature, expectedSignature)) {
-    return false;
+    return undefined;
   }
 
   const payload = readStatePayload(encodedPayload);
   if (!payload) {
-    return false;
+    return undefined;
   }
 
   const issuedAt = Date.parse(payload.issuedAt);
   if (!Number.isFinite(issuedAt)) {
-    return false;
+    return undefined;
   }
 
   const now = options.now?.getTime() ?? Date.now();
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
-  return issuedAt <= now && now - issuedAt <= maxAgeMs;
+  return issuedAt <= now && now - issuedAt <= maxAgeMs ? payload : undefined;
 }
 
 function signStatePayload(encodedPayload: string, secret: string): string {

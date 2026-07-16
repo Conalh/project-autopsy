@@ -34,13 +34,21 @@ export async function fetchWithTimeout(
   fetchImpl: typeof fetch,
   url: string,
   init: RequestInit,
-  timeoutMs: number
+  timeoutMs: number,
+  externalSignal?: AbortSignal
 ): Promise<Response> {
   const controller = new AbortController();
+  if (externalSignal?.aborted) {
+    controller.abort();
+  }
+
+  const abortFromExternalSignal = (): void => controller.abort();
+  externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetchImpl(url, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 }

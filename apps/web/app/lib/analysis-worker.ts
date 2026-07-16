@@ -7,6 +7,7 @@ import {
   inspectRepositoryJobPayload,
   type RepositoryInspectionJobPayload
 } from "./repository-inspection";
+import { clampInspectionBudgets, readHostedInspectionBudgets } from "./source-policy";
 
 interface ProcessNextAnalysisJobOptions extends WebAnalysisJobQueueOptions {
   inspect?: (payload: RepositoryInspectionJobPayload) => Promise<unknown>;
@@ -121,8 +122,17 @@ function readRepositoryInspectionPayload(payload: unknown): RepositoryInspection
       ? { branch: candidate.branch }
       : {}),
     checkDependencyRegistry: candidate.checkDependencyRegistry === true,
-    publicOnly: candidate.publicOnly !== false
+    publicOnly: candidate.publicOnly !== false,
+    budgets: sanitizeBudgetPayload(candidate.budgets)
   };
+}
+
+function sanitizeBudgetPayload(value: unknown): RepositoryInspectionJobPayload["budgets"] {
+  if (!value || typeof value !== "object") {
+    return readHostedInspectionBudgets();
+  }
+
+  return clampInspectionBudgets(value as Record<string, unknown>);
 }
 
 function normalizeMaxJobs(value: number | undefined): number {

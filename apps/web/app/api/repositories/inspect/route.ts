@@ -1,14 +1,18 @@
 import { PrivateRepositoryNotAllowedError } from "@project-autopsy/core";
 import { enqueueWebAnalysisJob } from "../../../lib/analysis-queue";
 import { resolveGitHubToken } from "../../../lib/github-auth";
+import { jsonNoStoreResponse } from "../../../lib/http-cache";
 import {
   clientKeyFromHeaders,
-  inspectRateLimiter
+  createInspectRateLimiter
 } from "../../../lib/inspect-rate-limit";
 import {
   assertSourceAllowed,
   evaluateInspectAuth,
   isPrivateRepositoryInspectionAllowed,
+  inspectAuthFailureMessage,
+  inspectAuthFailureStatus,
+  readHostedInspectionBudgets,
   SourceNotAllowedError
 } from "../../../lib/source-policy";
 import {
@@ -24,17 +28,25 @@ interface InspectRequestBody {
   queue?: unknown;
 }
 
+export const dynamic = "force-dynamic";
+
+const rateLimiter = createInspectRateLimiter();
+
 export async function POST(request: Request): Promise<Response> {
   const auth = evaluateInspectAuth(request.headers);
-  if (auth.configured && !auth.authorized) {
-    return jsonResponse({ error: "Unauthorized." }, 401);
+  if (!auth.authorized) {
+    return jsonResponse({ error: inspectAuthFailureMessage(auth) }, inspectAuthFailureStatus(auth));
   }
 
-  const rate = inspectRateLimiter.check(clientKeyFromHeaders(request.headers));
+  const rate = rateLimiter.check(clientKeyFromHeaders(request.headers));
   if (!rate.allowed) {
     return new Response(JSON.stringify({ error: "Too many inspection requests. Try again shortly." }), {
       status: 429,
-      headers: { "content-type": "application/json", "retry-after": String(rate.retryAfterSeconds) }
+      headers: {
+        "cache-control": "private, no-store",
+        "content-type": "application/json",
+        "retry-after": String(rate.retryAfterSeconds)
+      }
     });
   }
 
@@ -56,7 +68,8 @@ export async function POST(request: Request): Promise<Response> {
       branch: typeof body.branch === "string" && body.branch.trim().length > 0 ? body.branch : undefined,
       checkDependencyRegistry: body.checkRegistry === true,
       token: await resolveGitHubToken(),
-      publicOnly: !isPrivateRepositoryInspectionAllowed()
+      publicOnly: !isPrivateRepositoryInspectionAllowed(),
+      budgets: readHostedInspectionBudgets()
     };
 
     if (body.queue === true) {
@@ -65,7 +78,8 @@ export async function POST(request: Request): Promise<Response> {
         save: body.save === true,
         branch: options.branch,
         checkDependencyRegistry: options.checkDependencyRegistry,
-        publicOnly: options.publicOnly
+        publicOnly: options.publicOnly,
+        budgets: options.budgets
       });
       const job = await enqueueWebAnalysisJob(() => inspectRepository(body.source as string, body.save === true, options), {
         payload,
@@ -87,7 +101,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return Response.json(body, { status });
+  return jsonNoStoreResponse(body, { status });
 }
 
 function readEnv(name: string): string | undefined {

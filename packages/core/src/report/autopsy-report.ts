@@ -10,6 +10,7 @@ import {
   isGitHubUrl,
   type GitHubInspectionOptions
 } from "../ingest/github.js";
+import { createInspectionBudgetContext } from "../ingest/budgets.js";
 import { inspectLocalRepository } from "../ingest/local.js";
 import type {
   AutopsyReport,
@@ -27,16 +28,18 @@ export async function analyzeRepository(
   source: string,
   options: GitHubInspectionOptions = {}
 ): Promise<AutopsyReport> {
+  const budgetContext = createInspectionBudgetContext(options.budgets);
+  const inspectionOptions = { ...options, budgetContext };
   const snapshot = isGitHubUrl(source)
-    ? await inspectGitHubRepository({ url: source, branch: options.branch }, options)
-    : await inspectLocalRepository(source);
+    ? await inspectGitHubRepository({ url: source, branch: options.branch }, inspectionOptions)
+    : await inspectLocalRepository(source, inspectionOptions);
   const rawFindings = [
     ...detectProjectIdentity(snapshot),
     ...detectMomentumBreak(snapshot),
     ...detectSetupRisk(snapshot),
     ...detectValidationSurface(snapshot),
     ...detectDocsDrift(snapshot),
-    ...(await detectDependencyDrift(snapshot, options)),
+    ...(await detectDependencyDrift(snapshot, inspectionOptions)),
     ...detectIngestionIntegrity(snapshot)
   ];
   const { findings, evidenceIndex } = assignEvidenceIds(rawFindings);

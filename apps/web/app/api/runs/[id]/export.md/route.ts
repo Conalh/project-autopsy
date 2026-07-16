@@ -1,4 +1,10 @@
 import { createWebRunStore } from "../../../../lib/run-store";
+import { jsonNoStoreResponse, noStoreHeaders } from "../../../../lib/http-cache";
+import {
+  evaluateInspectAuth,
+  inspectAuthFailureMessage,
+  inspectAuthFailureStatus
+} from "../../../../lib/source-policy";
 
 interface RunExportRouteContext {
   params: Promise<{
@@ -6,17 +12,24 @@ interface RunExportRouteContext {
   }>;
 }
 
-export async function GET(_request: Request, context: RunExportRouteContext): Promise<Response> {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request, context: RunExportRouteContext): Promise<Response> {
+  const auth = evaluateInspectAuth(request.headers);
+  if (!auth.authorized) {
+    return jsonNoStoreResponse({ error: inspectAuthFailureMessage(auth) }, { status: inspectAuthFailureStatus(auth) });
+  }
+
   const { id } = await context.params;
   const run = await (await createWebRunStore()).getRun(id);
 
   if (!run) {
-    return Response.json({ error: `Saved run not found: ${id}` }, { status: 404 });
+    return jsonNoStoreResponse({ error: `Saved run not found: ${id}` }, { status: 404 });
   }
 
   return new Response(run.markdown, {
-    headers: {
+    headers: noStoreHeaders({
       "content-type": "text/markdown; charset=utf-8"
-    }
+    })
   });
 }

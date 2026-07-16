@@ -2,7 +2,8 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { createGitHubAppCallbackState } from "../../../lib/github-app-callback-state";
+import { createStoredGitHubAppCallbackState } from "../../../lib/github-app-callback-state";
+import { createFileGitHubAppInstallationStore } from "../../../lib/github-app-installation-store";
 import { GET } from "./route";
 
 const ENV_KEYS = [
@@ -22,11 +23,11 @@ describe("GitHub App callback route", () => {
 
   test("stores the installation id from GitHub's callback", async () => {
     const filePath = await createStorePath();
-    const state = createGitHubAppCallbackState("state-secret");
     process.env.PROJECT_AUTOPSY_GITHUB_APP_ID = "123";
     process.env.PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH = filePath;
     process.env.PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY = "private-key";
     process.env.PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET = "state-secret";
+    const state = await issuedState(filePath);
 
     const response = await GET(
       new Request(
@@ -53,6 +54,17 @@ describe("GitHub App callback route", () => {
     });
   });
 
+  test("requires a callback state secret before persisting private-capable installations", async () => {
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_ID = "123";
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY = "private-key";
+
+    const response = await GET(new Request("http://localhost/api/github-app/callback?installation_id=456"));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toContain("PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET");
+  });
+
   test("returns a setup error when installation id is missing", async () => {
     process.env.PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET = "state-secret";
     const response = await GET(new Request("http://localhost/api/github-app/callback?setup_action=install"));
@@ -67,7 +79,7 @@ describe("GitHub App callback route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(503);
-    expect(body.error).toBe("GitHub App callback state secret is required.");
+    expect(body.error).toContain("PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET");
   });
 
   test("requires signed callback state when a state secret is configured", async () => {
@@ -94,11 +106,11 @@ describe("GitHub App callback route", () => {
 
   test("accepts valid signed callback state", async () => {
     const filePath = await createStorePath();
-    const state = createGitHubAppCallbackState("state-secret");
     process.env.PROJECT_AUTOPSY_GITHUB_APP_ID = "123";
     process.env.PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH = filePath;
     process.env.PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY = "private-key";
     process.env.PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET = "state-secret";
+    const state = await issuedState(filePath);
 
     const response = await GET(
       new Request(`http://localhost/api/github-app/callback?installation_id=456&state=${encodeURIComponent(state)}`)
@@ -111,9 +123,34 @@ describe("GitHub App callback route", () => {
       readyForPrivateRepos: true
     });
   });
+
+  test("rejects replayed callback state", async () => {
+    const filePath = await createStorePath();
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_ID = "123";
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_INSTALLATION_PATH = filePath;
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_PRIVATE_KEY = "private-key";
+    process.env.PROJECT_AUTOPSY_GITHUB_APP_CALLBACK_STATE_SECRET = "state-secret";
+    const state = await issuedState(filePath);
+
+    const url = `http://localhost/api/github-app/callback?installation_id=456&state=${encodeURIComponent(state)}`;
+    const first = await GET(new Request(url));
+    const replay = await GET(new Request(url));
+    const replayBody = await replay.json();
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(400);
+    expect(replayBody.error).toBe("GitHub App callback state is invalid or expired.");
+  });
 });
 
 async function createStorePath(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "project-autopsy-gh-app-"));
   return path.join(directory, "installation.json");
+}
+
+async function issuedState(filePath: string): Promise<string> {
+  return createStoredGitHubAppCallbackState(
+    "state-secret",
+    createFileGitHubAppInstallationStore({ path: filePath })
+  );
 }

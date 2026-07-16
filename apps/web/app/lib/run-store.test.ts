@@ -139,6 +139,13 @@ function createReport(projectName: string): AutopsyReport {
       summary: {
         projectName,
         technologies: []
+      },
+      completeness: {
+        files: { status: "complete", discovered: 1, included: 1, skipped: 0, reasons: [] },
+        manifests: { status: "complete", discovered: 0, read: 0, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+        docs: { status: "complete", discovered: 0, read: 0, skipped: 0, oversized: 0, failed: 0, reasons: [] },
+        commits: { status: "complete", requested: 0, read: 0, skipped: 0, reasons: [] },
+        runtime: { status: "complete", elapsedMs: 0, limitMs: 60000, timedOut: false, reasons: [] }
       }
     },
     findings: [],

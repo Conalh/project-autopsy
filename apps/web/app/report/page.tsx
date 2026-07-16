@@ -1,14 +1,26 @@
 import path from "node:path";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { analyzeAndSaveRepository, analyzeRepository } from "@project-autopsy/core";
+import {
+  analyzeRepository,
+  createExternalAutopsyReport,
+  renderJsonReport,
+  renderMarkdownReport
+} from "@project-autopsy/core";
+import { AccessRequired } from "../lib/access-ui";
+import { clientKeyFromHeaders, createInspectRateLimiter } from "../lib/inspect-rate-limit";
 import { createWebRunStore, findWorkspaceRoot } from "../lib/run-store";
 import { resolveGitHubToken } from "../lib/github-auth";
-import { clientKeyFromHeaders, inspectRateLimiter } from "../lib/inspect-rate-limit";
-import { assertSourceAllowed, evaluateInspectAuth } from "../lib/source-policy";
+import {
+  assertSourceAllowed,
+  evaluateInspectAuth,
+  inspectAuthFailureMessage
+} from "../lib/source-policy";
 import { ReportView } from "./report-view";
 
 export const dynamic = "force-dynamic";
+
+const reportRateLimiter = createInspectRateLimiter();
 
 interface ReportPageProps {
   searchParams: Promise<{
@@ -21,6 +33,27 @@ interface ReportPageProps {
 }
 
 export default async function ReportPage({ searchParams }: ReportPageProps) {
+  const requestHeaders = await headers();
+  const auth = evaluateInspectAuth(requestHeaders);
+  if (!auth.authorized) {
+    return (
+      <AccessRequired
+        title="Inspection access required"
+        message={inspectAuthFailureMessage(auth)}
+      />
+    );
+  }
+
+  const rate = reportRateLimiter.check(clientKeyFromHeaders(requestHeaders));
+  if (!rate.allowed) {
+    return (
+      <AccessRequired
+        title="Inspection rate limit reached"
+        message={`Too many inspection requests. Try again in ${rate.retryAfterSeconds} seconds.`}
+      />
+    );
+  }
+
   const params = await searchParams;
   const resolved = resolveSource(params);
 
@@ -44,36 +77,27 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
       assertSourceAllowed(resolved.source);
     }
 
-    const requestHeaders = await headers();
-    const auth = evaluateInspectAuth(requestHeaders);
-    if (auth.configured && !auth.authorized) {
-      throw new Error("Inspection access token required.");
-    }
-    const rate = inspectRateLimiter.check(clientKeyFromHeaders(requestHeaders));
-    if (!rate.allowed) {
-      throw new Error(`Too many inspection requests. Try again in ${rate.retryAfterSeconds} seconds.`);
-    }
-
     const source = resolved.source;
     const token = await resolveGitHubToken();
-
-    if (params.save === "1") {
-      const saved = await analyzeAndSaveRepository(source, {
+    const report = createExternalAutopsyReport(
+      await analyzeRepository(source, {
         branch: params.branch,
         checkDependencyRegistry: params.checkRegistry === "1",
         token,
-        publicOnly: true,
-        store: await createWebRunStore()
+        publicOnly: true
+      })
+    );
+
+    if (params.save === "1") {
+      const saved = await (await createWebRunStore()).saveRun({
+        source,
+         report,
+         markdown: renderMarkdownReport(report),
+         json: renderJsonReport(report)
       });
       return <ReportView report={saved.report} savedRunId={saved.id} />;
     }
 
-    const report = await analyzeRepository(source, {
-      branch: params.branch,
-      checkDependencyRegistry: params.checkRegistry === "1",
-      token,
-      publicOnly: true
-    });
     return <ReportView report={report} />;
   } catch (error) {
     return (

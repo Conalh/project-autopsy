@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { createExternalAutopsyReport, type AutopsyReport } from "@project-autopsy/core";
 
 export type AnalysisJobStatus = "queued" | "running" | "completed" | "failed";
 
@@ -146,6 +147,8 @@ export async function migratePostgresAnalysisJobStore(client: PostgresQueryClien
 export function createPostgresAnalysisJobStore(client: PostgresQueryClient): AnalysisJobStore {
   return {
     async createJob(job) {
+      const sanitizedResult = sanitizeAnalysisJobValue(job.result);
+      const sanitizedPayload = sanitizeAnalysisJobValue(job.payload);
       await client.query(
         `INSERT INTO analysis_jobs (
           id,
@@ -163,15 +166,15 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
           job.status,
           job.createdAt,
           job.updatedAt,
-          job.result === undefined ? null : JSON.stringify(job.result),
-          job.payload === undefined ? null : JSON.stringify(job.payload),
-          job.error ?? null,
+          sanitizedResult === undefined ? null : JSON.stringify(sanitizedResult),
+          sanitizedPayload === undefined ? null : JSON.stringify(sanitizedPayload),
+          sanitizeErrorMessage(job.error),
           job.attempts ?? 0,
           normalizeMaxAttempts(job.maxAttempts)
         ]
       );
 
-      return job;
+      return sanitizeAnalysisJob(job);
     },
 
     async getJob(id) {
@@ -223,6 +226,7 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
 
     async updateJob(id, patch) {
       const updatedAt = new Date().toISOString();
+      const sanitizedResult = sanitizeAnalysisJobValue(patch.result);
       const result = await client.query<AnalysisJobRow>(
         `UPDATE analysis_jobs
         SET
@@ -237,8 +241,8 @@ export function createPostgresAnalysisJobStore(client: PostgresQueryClient): Ana
           id,
           patch.status,
           updatedAt,
-          patch.result === undefined ? null : JSON.stringify(patch.result),
-          patch.error ?? null,
+          sanitizedResult === undefined ? null : JSON.stringify(sanitizedResult),
+          sanitizeErrorMessage(patch.error),
           patch.attempts ?? 0
         ]
       );
@@ -288,7 +292,7 @@ export async function enqueueWebAnalysisJob<Result>(
     void runStoredJob(job.id, work, store);
   }
 
-  return job;
+  return sanitizeAnalysisJob(job);
 }
 
 export async function getWebAnalysisJob<Result = unknown>(
@@ -324,12 +328,12 @@ async function runJob<Result>(job: InternalAnalysisJob<Result>, work: () => Prom
 }
 
 function updateJob<Result>(job: InternalAnalysisJob<Result>, patch: Partial<AnalysisJob<Result>>): void {
-  Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+  Object.assign(job, sanitizeAnalysisJob(patch), { updatedAt: new Date().toISOString() });
 }
 
 function serializeJob<Result>(job: InternalAnalysisJob<Result>): AnalysisJob<Result> {
   const { done: _done, resolveDone: _resolveDone, ...serialized } = job;
-  return serialized;
+  return sanitizeAnalysisJob(serialized);
 }
 
 async function runStoredJob<Result>(
@@ -380,17 +384,17 @@ export async function createWebAnalysisJobStore(
 }
 
 function toAnalysisJob<Result = unknown>(row: AnalysisJobRow): AnalysisJob<Result> {
-  return {
+  return sanitizeAnalysisJob({
     id: row.id,
     status: row.status,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     attempts: row.attempts ?? 0,
     maxAttempts: normalizeMaxAttempts(row.max_attempts ?? undefined),
-    ...(row.payload_json === null ? {} : { payload: readResultJson(row.payload_json) }),
-    ...(row.result_json === null ? {} : { result: readResultJson<Result>(row.result_json) }),
-    ...(row.error ? { error: row.error } : {})
-  };
+    ...(row.payload_json === null ? {} : { payload: sanitizeAnalysisJobValue(readResultJson(row.payload_json)) }),
+    ...(row.result_json === null ? {} : { result: sanitizeAnalysisJobValue(readResultJson<Result>(row.result_json)) as Result }),
+    ...(row.error ? { error: sanitizeErrorMessage(row.error) } : {})
+  });
 }
 
 function readResultJson<Result>(resultJson: string | Record<string, unknown>): Result {
@@ -426,4 +430,75 @@ function normalizeMaxAttempts(value: number | undefined): number {
 
 function normalizeListLimit(value: number | undefined): number {
   return value && value > 0 ? Math.floor(value) : 20;
+}
+
+function sanitizeAnalysisJob<Result = unknown>(job: Partial<AnalysisJob<Result>>): AnalysisJob<Result> {
+  return {
+    ...job,
+    ...(job.payload === undefined ? {} : { payload: sanitizeAnalysisJobValue(job.payload) }),
+    ...(job.result === undefined ? {} : { result: sanitizeAnalysisJobValue(job.result) as Result }),
+    ...(job.error === undefined ? {} : { error: sanitizeErrorMessage(job.error) })
+  } as AnalysisJob<Result>;
+}
+
+function sanitizeAnalysisJobValue(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return redactSensitiveString(value);
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  if (looksLikeAutopsyReport(value)) {
+    return createExternalAutopsyReport(value);
+  }
+
+  if (seen.has(value)) {
+    return "[redacted-circular]";
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeAnalysisJobValue(entry, seen));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      isSensitiveKey(key) ? "[redacted]" : sanitizeAnalysisJobValue(entry, seen)
+    ])
+  );
+}
+
+function sanitizeErrorMessage(error: string | undefined): string | undefined {
+  return error ? redactSensitiveString(error) : undefined;
+}
+
+function isSensitiveKey(key: string): boolean {
+  return /(?:authorization|bearer|token|secret|password|private[_-]?key|pat|jwt)/i.test(key);
+}
+
+function redactSensitiveString(value: string): string {
+  return value
+    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[redacted-private-key]")
+    .replace(/\b(?:github_pat|gh[pousr])_[A-Za-z0-9_]{4,}\b/g, "[redacted-token]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
+    .replace(/(installation[-_\s]?token\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]");
+}
+
+function looksLikeAutopsyReport(value: object): value is AutopsyReport {
+  const candidate = value as Partial<AutopsyReport>;
+  return Boolean(
+    candidate.metadata &&
+      candidate.summary &&
+      candidate.verdict &&
+      candidate.snapshot &&
+      Array.isArray(candidate.findings) &&
+      Array.isArray(candidate.revivalTasks)
+  );
 }

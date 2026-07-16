@@ -125,7 +125,7 @@ describe("dependency drift detector", () => {
 
     expect(finding).toMatchObject({
       severity: "info",
-      title: "npm dependency freshness was not checked",
+      title: expect.stringContaining("npm dependency freshness was not checked:"),
       body: expect.stringContaining("Registry lookup failed")
     });
   });

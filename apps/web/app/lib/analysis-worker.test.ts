@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { DEFAULT_INGESTION_BUDGETS } from "@project-autopsy/core";
 import {
   createPostgresAnalysisJobStore,
   enqueueWebAnalysisJob,
@@ -23,7 +24,11 @@ describe("analysis worker", () => {
         payload: {
           source: "https://github.com/acme/project",
           save: false,
-          checkDependencyRegistry: true
+          checkDependencyRegistry: true,
+          budgets: {
+            maxFiles: DEFAULT_INGESTION_BUDGETS.maxFiles + 1,
+            registryConcurrency: 2
+          }
         }
       }
     );
@@ -33,7 +38,7 @@ describe("analysis worker", () => {
       inspect: async (payload) => ({
         report: {
           summary: {
-            projectName: payload.source
+            projectName: `${payload.source}:${payload.budgets?.maxFiles}:${payload.budgets?.registryConcurrency}`
           }
         }
       })
@@ -46,7 +51,7 @@ describe("analysis worker", () => {
       result: {
         report: {
           summary: {
-            projectName: "https://github.com/acme/project"
+            projectName: `https://github.com/acme/project:${DEFAULT_INGESTION_BUDGETS.maxFiles}:2`
           }
         }
       }

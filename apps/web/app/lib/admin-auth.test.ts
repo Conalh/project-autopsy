@@ -5,6 +5,7 @@ describe("admin auth", () => {
   test("allows access when no admin token is configured", () => {
     expect(evaluateAdminAuth(new Headers(), {})).toEqual({
       configured: false,
+      required: false,
       authorized: true
     });
   });
@@ -12,7 +13,9 @@ describe("admin auth", () => {
   test("fails closed in production when no admin token is configured", () => {
     expect(evaluateAdminAuth(new Headers(), { NODE_ENV: "production" })).toEqual({
       configured: false,
-      authorized: false
+      required: true,
+      authorized: false,
+      missingConfiguration: true
     });
   });
 
@@ -23,6 +26,7 @@ describe("admin auth", () => {
 
     expect(evaluateAdminAuth(headers, { PROJECT_AUTOPSY_ADMIN_TOKEN: "secret-admin-token" })).toEqual({
       configured: true,
+      required: true,
       authorized: true
     });
   });
@@ -34,6 +38,7 @@ describe("admin auth", () => {
 
     expect(evaluateAdminAuth(headers, { PROJECT_AUTOPSY_ADMIN_TOKEN: "secret-admin-token" })).toEqual({
       configured: true,
+      required: true,
       authorized: true
     });
   });
@@ -41,6 +46,7 @@ describe("admin auth", () => {
   test("denies access when the configured token is missing or wrong", () => {
     expect(evaluateAdminAuth(new Headers(), { PROJECT_AUTOPSY_ADMIN_TOKEN: "secret-admin-token" })).toEqual({
       configured: true,
+      required: true,
       authorized: false
     });
 
@@ -50,7 +56,24 @@ describe("admin auth", () => {
       })
     ).toEqual({
       configured: true,
+      required: true,
       authorized: false
+    });
+  });
+
+  test("requires admin token configuration in production or private-credential deployments", () => {
+    expect(evaluateAdminAuth(new Headers(), { NODE_ENV: "production" })).toMatchObject({
+      configured: false,
+      required: true,
+      authorized: false,
+      missingConfiguration: true
+    });
+
+    expect(evaluateAdminAuth(new Headers(), { PROJECT_AUTOPSY_GITHUB_TOKEN: "github-token" })).toMatchObject({
+      configured: false,
+      required: true,
+      authorized: false,
+      missingConfiguration: true
     });
   });
 });

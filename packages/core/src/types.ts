@@ -58,6 +58,90 @@ export interface SnapshotSummary {
   technologies: string[];
 }
 
+export interface InspectionBudgets {
+  maxFiles: number;
+  maxDepth: number;
+  maxTotalBytes: number;
+  maxManifests: number;
+  maxManifestBytes: number;
+  maxDocs: number;
+  maxDocBytes: number;
+  maxTotalDocBytes: number;
+  maxCommits: number;
+  maxHttpRequests: number;
+  maxResponseBytes: number;
+  concurrency: number;
+  registryConcurrency: number;
+  maxRuntimeMs: number;
+  fetchTimeoutMs: number;
+}
+
+export type InspectionBudgetOverrides = Partial<InspectionBudgets>;
+
+export type CompletenessStatus = "complete" | "partial";
+
+export interface FileInventoryCompleteness {
+  status: CompletenessStatus;
+  discovered: number;
+  included: number;
+  skipped: number;
+  reasons: string[];
+}
+
+export interface ManifestCompleteness {
+  status: CompletenessStatus;
+  discovered: number;
+  read: number;
+  skipped: number;
+  oversized: number;
+  failed: number;
+  reasons: string[];
+}
+
+export interface DocsCompleteness {
+  status: CompletenessStatus;
+  discovered: number;
+  read: number;
+  skipped: number;
+  oversized: number;
+  failed: number;
+  reasons: string[];
+}
+
+export interface CommitCompleteness {
+  status: CompletenessStatus;
+  requested: number;
+  read: number;
+  skipped: number;
+  reasons: string[];
+}
+
+export interface HttpCompleteness {
+  status: CompletenessStatus;
+  requestsMade: number;
+  responsesTooLarge: number;
+  failures: number;
+  limitReached: boolean;
+  reasons: string[];
+}
+
+export interface RuntimeCompleteness {
+  status: CompletenessStatus;
+  elapsedMs: number;
+  limitMs: number;
+  timedOut: boolean;
+  reasons: string[];
+}
+
+export interface IngestionCompleteness {
+  files: FileInventoryCompleteness;
+  manifests: ManifestCompleteness;
+  docs: DocsCompleteness;
+  commits: CommitCompleteness;
+  http?: HttpCompleteness;
+  runtime: RuntimeCompleteness;
+}
+
 export interface RepoSnapshot {
   sourceType: SourceType;
   rootPath: string;
@@ -74,6 +158,7 @@ export interface RepoSnapshot {
   docs: DocRecord[];
   commits: CommitSummary[];
   summary: SnapshotSummary;
+  completeness: IngestionCompleteness;
   /**
    * Non-fatal problems encountered while ingesting the repository (e.g. a
    * truncated GitHub tree or files skipped by size/count caps). Surfaced as

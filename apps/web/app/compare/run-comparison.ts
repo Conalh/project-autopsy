@@ -19,6 +19,8 @@ interface ComparedRun {
   createdAt: string;
   score: number;
   verdictStatus: VerdictStatus;
+  analysisStatus: "complete" | "partial";
+  limitationReasons: string[];
 }
 
 export interface RunComparison {
@@ -69,12 +71,33 @@ export function buildFindingDeltaChartItems(findingDeltas: FindingCounts): Findi
 }
 
 function summarizeRun(run: SavedAnalysisRun): ComparedRun {
+  const completeness = run.report.snapshot.completeness;
+  const reasons = [
+    ...completeness.files.reasons,
+    ...completeness.manifests.reasons,
+    ...completeness.docs.reasons,
+    ...completeness.commits.reasons,
+    ...(completeness.http?.reasons ?? []),
+    ...completeness.runtime.reasons
+  ];
+
   return {
     id: run.id,
     projectName: run.projectName,
     createdAt: run.createdAt,
     score: run.score,
-    verdictStatus: run.verdictStatus
+    verdictStatus: run.verdictStatus,
+    analysisStatus: [
+      completeness.files.status,
+      completeness.manifests.status,
+      completeness.docs.status,
+      completeness.commits.status,
+      completeness.http?.status ?? "complete",
+      completeness.runtime.status
+    ].includes("partial")
+      ? "partial"
+      : "complete",
+    limitationReasons: [...new Set(reasons)].sort()
   };
 }
 

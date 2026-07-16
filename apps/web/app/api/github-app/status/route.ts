@@ -1,8 +1,20 @@
+import { adminAuthFailureMessage, adminAuthFailureStatus, evaluateAdminAuth } from "../../../lib/admin-auth";
 import { getGitHubAppSetupAsync } from "../../../lib/github-app-setup";
 import { isPrivateRepositoryInspectionAllowed } from "../../../lib/source-policy";
+import { jsonNoStoreResponse } from "../../../lib/http-cache";
 
-export async function GET(): Promise<Response> {
-  return Response.json({
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request): Promise<Response> {
+  const adminAuth = evaluateAdminAuth(request.headers);
+  if (!adminAuth.authorized) {
+    return jsonNoStoreResponse(
+      { error: adminAuthFailureMessage(adminAuth) },
+      { status: adminAuthFailureStatus(adminAuth) }
+    );
+  }
+
+  return jsonNoStoreResponse({
     githubApp: await getGitHubAppSetupAsync(),
     privateRepositoryInspectionAllowed: isPrivateRepositoryInspectionAllowed()
   });

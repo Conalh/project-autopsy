@@ -1,4 +1,5 @@
 import type { Finding, ManifestRecord, RepoSnapshot } from "../types.js";
+import { formatCompletenessReasons, hasPartialFileInventory } from "./uncertainty.js";
 
 export function detectSetupRisk(snapshot: RepoSnapshot): Finding[] {
   const findings: Finding[] = [];
@@ -87,9 +88,13 @@ function detectMissingLockfile(snapshot: RepoSnapshot, npmManifest: ManifestReco
   return [
     {
       kind: "setup-risk",
-      severity: "medium",
-      title: "Dependencies exist without a lockfile",
-      body: "The project declares npm dependencies but does not include a recognized lockfile, so installs may drift.",
+      severity: hasPartialFileInventory(snapshot) ? "low" : "medium",
+      title: hasPartialFileInventory(snapshot)
+        ? "Dependencies may exist without a visible lockfile (provisional)"
+        : "Dependencies exist without a lockfile",
+      body: hasPartialFileInventory(snapshot)
+        ? `The project declares npm dependencies, but the file inventory was incomplete (${formatCompletenessReasons(snapshot)}), so the missing-lockfile conclusion is provisional.`
+        : "The project declares npm dependencies but does not include a recognized lockfile, so installs may drift.",
       evidence: [
         {
           kind: "manifest",
