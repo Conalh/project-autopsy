@@ -21,7 +21,7 @@
     "@project-autopsy/core": "file:../../packages/core"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.19.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.14"
   }
